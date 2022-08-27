@@ -22,6 +22,7 @@
       "mode": "typescript"
     }
   },
+  "ignorePatterns": ["dist/", "scripts/"],
   "rules": {
     "prettier/prettier": [
       "warn",

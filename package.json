@@ -1,18 +1,22 @@
 {
-  "name": "cargo-field",
+  "name": "js13k2022",
   "version": "1.0.0",
   "license": "MIT",
   "scripts": {
     "start": "yarn serve",
-    "serve": "live-server --port=9841",
-    "build": "node scripts/build.js"
+    "serve": "concurrently \"live-server --port=9840 --proxy=/res:http://localhost:9842/res/\" \"http-server --port=9842\"",
+    "dist": "http-server --port=9843 dist",
+    "why": "mv res/sprites.png res/sprites2.png && mv res/sprites2.png res/sprites.png",
+    "build": "rm -rf dist *.zip && node scripts/build.js"
   },
   "devDependencies": {
+    "concurrently": "^7.3.0",
     "eslint": "^8.21.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-jsdoc": "^39.3.6",
     "eslint-plugin-prettier": "^4.2.1",
     "html-minifier": "^4.0.0",
+    "http-server": "^14.1.1",
     "live-server": "^1.2.2",
     "prettier": "^2.7.1",
     "terser": "^5.14.2",

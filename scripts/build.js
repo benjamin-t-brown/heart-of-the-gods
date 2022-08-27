@@ -1,13 +1,10 @@
 // @ts-nocheck
-// eslint-disable require-jsdoc
 
 const { exec } = require('child_process');
 const fs = require('fs');
 const minifyHtml = require('html-minifier').minify;
-
-const outputDirName = process.argv[2];
-
-// console.log('Client Files', CLIENT_FILES);
+const Terser = require('terser');
+const path = require('path');
 
 const execAsync = async (command) => {
   return new Promise((resolve, reject) => {
@@ -22,10 +19,6 @@ const execAsync = async (command) => {
   });
 };
 
-var Terser = require('terser');
-var path = require('path');
-
-// eslint-disable-next-line require-jsdoc, jsdoc/require-jsdoc
 function getAllFiles(dirPath, arrayOfFiles) {
   let files = fs.readdirSync(dirPath);
 
@@ -42,7 +35,6 @@ function getAllFiles(dirPath, arrayOfFiles) {
   return arrayOfFiles.filter((path) => path.match(/\.js$/));
 }
 
-// eslint-disable-next-line require-jsdoc, jsdoc/require-jsdoc
 async function minifyFiles(filePaths, options) {
   console.log('minifyfiles', filePaths);
 
@@ -69,24 +61,15 @@ const build = async () => {
 
   let htmlFile = fs.readFileSync(`${__dirname}/../index.html`).toString();
 
-  await execAsync(
-    `mkdir -p ${__dirname}/../dist/res/ && cp -r ${__dirname}/../res/* ${__dirname}/../dist/res/ || :`
-  );
-  await execAsync(
-    `mkdir -p ${__dirname}/../dist/src/ && cp -r ${__dirname}/../src/* ${__dirname}/../dist/src/ || :`
-  );
+  const resDistDir = path.resolve(`${__dirname}/../dist/res/`);
+  const srcDistDir = path.resolve(`${__dirname}/../dist/src/`);
 
-  const terserArgs = [
-    // 'passes=3',
-    // 'pure_getters',
-    // 'unsafe',
-    // 'unsafe_math',
-    // 'hoist_funs',
-    // 'toplevel',
-    // // 'drop_console',
-    // 'pure_funcs=[console.error,console.info,console.log,console.debug,console.warn]',
-    // 'ecma=9',
-  ];
+  await execAsync(
+    `mkdir -p ${resDistDir} && cp -r ${__dirname}/../res/* ${resDistDir} || :`
+  );
+  await execAsync(
+    `mkdir -p ${srcDistDir} && cp -r ${__dirname}/../src/* ${srcDistDir} || :`
+  );
 
   const terserOptions = {
     passes: 3,
@@ -155,29 +138,25 @@ const build = async () => {
   //   `mkdir -p dist && cp .build/index.html dist && cp .build/main.js dist && cp .build/packed.png dist`
   // );
 
+  const zipFilePath = path.resolve(`${__dirname}/../hotg.zip`);
+
   console.log('\nZip (command line)...');
   try {
     await execAsync(
-      `cd dist && zip -9 ${__dirname}/../cargo-field.zip index.html src/*.js res/*.png`
+      `cd dist && zip -9 ${zipFilePath} index.html src/*.js res/*.png`
     );
-    console.log(
-      await execAsync(`stat -c '%n %s' ${__dirname}/../cargo-field.zip`)
-    );
+    console.log(await execAsync(`stat -c '%n %s' ${zipFilePath}`));
   } catch (e) {
     console.log('failed zip', e);
   }
   try {
-    await execAsync(`advzip -z -4 ${__dirname}/../cargo-field.zip`);
-    console.log(
-      await execAsync(`stat -c '%n %s' ${__dirname}/../cargo-field.zip`)
-    );
+    await execAsync(`advzip -z -4 ${zipFilePath}`);
+    console.log(await execAsync(`stat -c '%n %s' ${zipFilePath}`));
   } catch (e) {
     console.log('failed adv zip', e);
   }
   try {
-    const result = await execAsync(
-      `stat -c '%n %s' ${__dirname}/../cargo-field.zip`
-    );
+    const result = await execAsync(`stat -c '%n %s' ${zipFilePath}`);
     const bytes = parseInt(result.split(' ')[1]);
     const kb13 = 13312;
     console.log(

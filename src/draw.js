@@ -41,12 +41,12 @@ const loadImage = (imageName, imagePath) => {
 export const colors = {
   WHITE: '#F8F8F8',
   BLACK: '#111',
-  GREY: '#8D87A2',
-  BLUE: '#42CAFD',
-  RED: '#E1534A',
-  YELLOW: '#FFCE00',
-  GREEN: '#71AA34',
-  PURPLE: '#8E478C',
+  //   GREY: '#8D87A2',
+  //   BLUE: '#42CAFD',
+  //   RED: '#E1534A',
+  //   YELLOW: '#FFCE00',
+  //   GREEN: '#71AA34',
+  //   PURPLE: '#8E478C',
 };
 
 /** @type {DrawTextParams} */
@@ -63,6 +63,10 @@ class Draw {
   height = 0;
   fm = 1; // frame multiplier, updated every frame
   colors = colors;
+  SCREEN_HEIGHT = 512 * 1.5;
+  SCREEN_WIDTH = 683 * 1.5;
+
+  enabled = true;
 
   /** */
   async init() {
@@ -70,30 +74,33 @@ class Draw {
     canvas = c;
     this.handleResize();
     document.getElementById('canvasDiv')?.appendChild(canvas);
-    // const img = await loadImage('sprites', 'res/sprites.png');
-
-    // const imgSize = 128;
-    // const spriteSize = 16;
-    // let ctr = 0;
-    // for (let i = 0; i < imgSize / spriteSize; i++) {
-    //   for (let j = 0; j < imgSize / spriteSize; j++) {
-    //     const sprite = this.createSprite(
-    //       img,
-    //       j * spriteSize,
-    //       i * spriteSize,
-    //       spriteSize,
-    //       spriteSize
-    //     );
-    //     sprites['spr_' + ctr] = sprite;
-    //     ctr++;
-    //   }
-    // }
+    const img = await loadImage('sprites', 'res/sprites.png');
+    const imgSize = img.width;
+    const spriteSize = 16;
+    let ctr = 0;
+    for (let i = 0; i < imgSize / spriteSize; i++) {
+      for (let j = 0; j < imgSize / spriteSize; j++) {
+        const sprite = this.createSprite(
+          img,
+          j * spriteSize,
+          i * spriteSize,
+          spriteSize,
+          spriteSize
+        );
+        sprites['spr_' + ctr] = sprite;
+        const fSprite = (sprites['spr_' + ctr + '_f'] =
+          this.createFlippedSprite(sprite));
+        sprites['spr_' + ctr + '_h'] = this.createHitSprite(sprite);
+        sprites['spr_' + ctr + '_f_h'] = this.createHitSprite(fSprite);
+        ctr++;
+      }
+    }
   }
   /** */
   handleResize() {
     if (canvas) {
-      canvas.width = this.width = window.innerWidth;
-      canvas.height = this.height = window.innerHeight;
+      canvas.width = this.width = this.SCREEN_WIDTH;
+      canvas.height = this.height = this.SCREEN_HEIGHT;
       this.getCtx().imageSmoothingEnabled = false;
     }
   }
@@ -133,15 +140,42 @@ class Draw {
   };
 
   /**
-   * @param {HTMLCanvasElement} img
+   * @param {HTMLImageElement | HTMLCanvasElement} img
    * @param {number} x
    * @param {number} y
    * @param {number} w
    * @param {number} h
-   * @returns {any}
+   * @returns {Sprite}
    */
   createSprite(img, x, y, w, h) {
-    return [img, x, y, w, h];
+    const [canvas, ctx] = this.createCanvas('', 16, 16);
+    ctx.drawImage(img, x, y, w, h, 0, 0, w, h);
+    return [canvas, 0, 0, w, h];
+  }
+
+  /**
+   * @param {Sprite} sprite
+   * @returns {Sprite}
+   */
+  createFlippedSprite(sprite) {
+    const [c, , , w, h] = sprite;
+    const [canvas, ctx] = this.createCanvas('', w, h);
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(c, 0, 0);
+    return [canvas, 0, 0, w, h];
+  }
+
+  /**
+   * @param {Sprite} sprite
+   * @returns {Sprite}
+   */
+  createHitSprite(sprite) {
+    const [c, , , w, h] = sprite;
+    const [canvas, ctx] = this.createCanvas('', w, h);
+    ctx.filter = 'invert(1)';
+    ctx.drawImage(c, 0, 0);
+    return [canvas, 0, 0, w, h];
   }
 
   /**
@@ -153,7 +187,7 @@ class Draw {
   }
 
   /**
-   * @param {Sprite} sprite
+   * @param {string} sprite
    * @param {number} x
    * @param {number} y
    * @param {number} [rotation]
@@ -161,17 +195,19 @@ class Draw {
    * @param {CanvasRenderingContext2D} [ctx]
    */
   drawSprite(sprite, x, y, rotation, scale, ctx) {
+    if (!this.enabled) {
+      return;
+    }
+
     scale = scale || 1;
     ctx = ctx ?? this.getCtx();
     ctx.save();
-    const spriteObj = typeof sprite === 'string' ? getSprite(sprite) : sprite;
-    if (!spriteObj) {
-      throw new Error(`No sprite: "${sprite}"`);
-    }
+    const spriteObj = getSprite(sprite);
     rotation = rotation || 0;
     const [image, sprX, sprY, sprW, sprH] = spriteObj;
     const w = sprW * scale;
     const h = sprH * scale;
+
     x -= w / 2;
     y -= w / 2;
     ctx.translate(x, y);
@@ -273,7 +309,8 @@ class Draw {
       ctx.strokeText(text, x, y);
     }
 
-    ctx.fillStyle = color ?? 'blue';
+    // @ts-ignore
+    ctx.fillStyle = color;
     ctx.fillText(text, x, y);
   }
 }

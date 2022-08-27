@@ -1,0 +1,23 @@
+js13k2022 Competition Entry
+
+Theme: DEATH
+
+Game: Heart of the Gods
+
+In this game you embark on the river Styx to defend the Heart of the Gods from the endless, hungry navy of the Underworld.
+
+Controls: Arrows/WAD to pilot vessel.  Spacebar to upgrade.
+
+Development
+
+Install:
+
+`yarn`
+
+Run:
+
+`yarn start`
+
+Build Submission Zip File:
+
+`yarn build`

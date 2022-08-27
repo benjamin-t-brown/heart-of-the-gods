@@ -2,12 +2,12 @@
  * @typedef {object} ECS
  * @property {(...args: any[]) => void} register
  * @property {(...args: any[]) => void} process
- * @property {() => any} create
- * @property {() => any} get
+ * @property {() => object} create
+ * @property {(id: string) => any} get
  * @property {(...args: any[]) => any} select
  * @property {() => void} update
+ * @property {() => void} reset
  */
-
 const selectors = [];
 const systems = [];
 const entities = {};
@@ -40,12 +40,12 @@ const matchEntity = (entity) => {
 const ejectEntity = (entity) => {
   const { components } = entity;
   // eslint-disable-next-line no-restricted-syntax
-  for (const key in components) {
-    if (Object.prototype.hasOwnProperty.call(components, key)) {
-      const component = components[key];
-      component && component.destructor && component.destructor();
-    }
-  }
+  // for (const key in components) {
+  //   if (Object.prototype.hasOwnProperty.call(components, key)) {
+  //     const component = components[key];
+  //     component && component.destructor && component.destructor();
+  //   }
+  // }
 
   selectors.forEach((selector) => selector.remove(entity));
   delete entities[entity.id];
@@ -126,9 +126,9 @@ class Node {
 
 class Selector {
   constructor(mask) {
-    if (!mask) {
-      throw new Error('Empty selector');
-    }
+    // if (!mask) {
+    //   throw new Error('Empty selector');
+    // }
 
     this.mask = mask;
     this.map = {};
@@ -200,14 +200,15 @@ const now = perf.now.bind(perf);
 export default {
   register(...Components) {
     Components.forEach((Component) => {
-      if (bit > 31) {
-        throw new Error('Components limit reached');
-      }
+      // if (bit > 31) {
+      //   throw new Error('Components limit reached');
+      //   return;
+      // }
 
-      if (Component[ecsComponentSign]) {
-        // throw new Error('The component is already registered');
-        return;
-      }
+      // if (Component[ecsComponentSign]) {
+      //   throw new Error('The component is already registered');
+      //   return;
+      // }
 
       const sign = bit.toString(36);
       signs[sign] = null;
@@ -226,7 +227,8 @@ export default {
     const entity = new Entity(id);
 
     if (entities[entity.id]) {
-      throw new Error('The ID already exist');
+      // throw new Error('The ID already exist');
+      return;
     }
 
     entities[entity.id] = entity;
@@ -265,5 +267,11 @@ export default {
     });
 
     return statistics;
+  },
+
+  reset() {
+    for (const i in entities) {
+      entities[i].eject();
+    }
   },
 };

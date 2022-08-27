@@ -1,14 +1,21 @@
 <html>
-  <header>
+  <body>
     <style>
       body {
         background: #333;
         margin: 0px;
       }
+      canvas {
+        border: 1px solid white;
+      }
+      #canvasDiv {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+      }
     </style>
-  </header>
-  <body><div id="canvasDiv"></div></body>
-  <footer>
+    <div id="canvasDiv"></div>
     <script src="src/index.js" type="module"></script>
-  </footer>
+  </body>
 </html>

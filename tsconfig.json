@@ -1,9 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "es2020",
+    "target": "ES2022",
+    "module": "es2022",
     "moduleResolution": "node",
-    // "outFile": "./main.js",
     "noEmit": true,
     "allowJs": true,
     "resolveJsonModule": true,
@@ -14,24 +13,19 @@
       "ES2017"
     ],
     "removeComments": true,
-    "sourceMap": true,
+    "sourceMap": false,
     "forceConsistentCasingInFileNames": true,
     "strictNullChecks": true,
     "noImplicitAny": false,
-    "experimentalDecorators": true,
-    "jsx": "react",
-    "jsxFactory": "h",
-    "jsxFragmentFactory": "Fragment",
+    "experimentalDecorators": false,
     "esModuleInterop": true,
-    "checkJs": true,
-    "pretty": true,
+    "checkJs": true
   },
   "references": [],
   "include": [
-    "src/**/*",
-    "test/**/*"
+    "src/**/*"
   ],
   "exclude": [
-    "scripts"
+    "scripts/**/*"
   ]
 }
