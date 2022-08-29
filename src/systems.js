@@ -22,8 +22,9 @@ import {
   UnderworldLegion,
   Turret,
 } from './components.js';
-import draw from './draw.js';
+import { draw } from './draw.js';
 import {
+  createBase,
   createCrate,
   createEnemyShip,
   createExhaust,
@@ -37,7 +38,14 @@ import {
   isPlayerEntity,
   newGame,
 } from './entities.js';
-import * as utils from './utils.js';
+import {
+  circleCollides,
+  distance,
+  getAngleTowards,
+  getVector,
+  normalize,
+  randomInt,
+} from './utils.js';
 
 /**
  * @typedef {object} Entity
@@ -49,8 +57,8 @@ import * as utils from './utils.js';
  * @property {() => void} eject
  */
 
-const PLAYER_PROJECTILE_COLOR = 'cyan';
-const ENEMY_PROJECTILE_COLOR = 'orange';
+const PLAYER_PROJECTILE_COLOR = '#42CAFD';
+const ENEMY_PROJECTILE_COLOR = '#F47E1B';
 
 /**
  * @param {any} selector
@@ -64,6 +72,14 @@ function createSystem(selector, iterate) {
         ? selector
         : () => selector.iterate(iterate),
   });
+}
+
+/**
+ * @param {import('./ecs.js').ECS} ecs
+ * @returns {boolean}
+ */
+function isGameStarted(ecs) {
+  return getPlayerEntity(ecs).get(Player).gameStarted;
 }
 
 /** @param {import('./ecs.js').ECS} ecs */
@@ -83,8 +99,6 @@ function Input(ecs) {
     keysUp.push(ev);
   });
 
-  // const handleKeyDown = (key, player, physics) => {};
-
   /**
    * @param {Player} player
    * @param {PhysicsBody} physics
@@ -96,19 +110,71 @@ function Input(ecs) {
     }
 
     let accelerating = false;
+    let acceleratingReverse = false;
+    const keys = player.keys;
 
-    if (player.keys.ArrowLeft || player.keys.a) {
+    if (keys.ArrowLeft || keys.a) {
       physics.turn('l');
     }
-    if (player.keys.ArrowRight || player.keys.d) {
+    if (keys.ArrowRight || keys.d) {
       physics.turn('r');
     }
-    if (player.keys.ArrowUp || player.keys.w) {
+    if (keys.ArrowUp || keys.w) {
       accelerating = true;
+    }
+    if (!accelerating && (keys.ArrowDown || keys.s)) {
+      acceleratingReverse = true;
     }
 
     physics.acc = accelerating;
+    physics.accRev = acceleratingReverse;
   };
+
+  /**
+   * @param {string} key
+   * @param {Player} player
+   * @param {Ship} ship
+   * @param {HitPoints} hp
+   */
+  function onKeyDown(key, player, ship, hp) {
+    const ui = getUiEntity(ecs).get(Ui);
+    const supplies = player.crates;
+
+    const assertCost = (cost) => {
+      if (supplies < cost) {
+        ui.setText(`Not enough supplies (need ${cost}).`);
+        return false;
+      } else {
+        player.crates -= cost;
+        return true;
+      }
+    };
+
+    if (key === '1') {
+      // upgrade turret
+      if (assertCost(5)) {
+        if (ship.upgradeTurret()) {
+          ui.setText('Turret upgraded!');
+        }
+      }
+    } else if (key === '2') {
+      // add new turret
+      if (assertCost(20)) {
+        ship.addTurret();
+        ui.setText('Turret added!');
+      }
+    } else if (key === '3') {
+      // heal ship
+      if (assertCost(25)) {
+        ship.addTurret();
+        ui.setText('Ship repaired!');
+        hp.hp += 10;
+        if (hp.hp > hp.maxHp) {
+          hp.hp = hp.maxHp;
+        }
+      }
+    }
+  }
 
   /** @param {Entity} entity */
   const iterate = (entity) => {
@@ -122,15 +188,18 @@ function Input(ecs) {
     keysDown.forEach((ev) => {
       if (!player.gameStarted) {
         player.gameStarted = true;
+        const ui = getUiEntity(ecs).get(Ui);
+        ui.setText('Destroy the Hearts of the Gods!');
+      } else if (!player.gameOver) {
+        onKeyDown(ev.key, player, entity.get(Ship), hp);
       }
       player.setKeyDown(ev.key);
-      // handleKeyDown(ev.key, player, physics);
     });
     keysUp.forEach((ev) => {
       player.setKeyUp(ev.key);
     });
 
-    if (player.gameStarted) {
+    if (isGameStarted(ecs)) {
       handleKeyUpdate(player, physics, hp);
     }
 
@@ -172,10 +241,14 @@ function Movement(ecs) {
     /** @type {PhysicsBody} */
     const physics = entity.get(PhysicsBody);
 
-    if (physics.acc) {
-      const [ax, ay] = utils.getVector(physics.angle, physics.accRate);
+    if (physics.acc || physics.accRev) {
+      const [ax, ay] = getVector(physics.angle, physics.accRate);
       physics.ax = ax;
       physics.ay = ay;
+      if (physics.accRev) {
+        physics.ax *= -0.5;
+        physics.ay *= -0.5;
+      }
     }
 
     const frameRatio = draw.fm;
@@ -220,7 +293,7 @@ function LimitedLifetimeUpdater(ecs) {
     /** @type {LimitedLifetime} */
     const lt = entity.get(LimitedLifetime);
     const renderable = entity.get(Renderable);
-    renderable.opacity = utils.normalize(
+    renderable.opacity = normalize(
       lt.timer.getPctComplete(),
       0,
       1,
@@ -228,7 +301,7 @@ function LimitedLifetimeUpdater(ecs) {
       lt.opacity.end
     );
 
-    renderable.scale = utils.normalize(
+    renderable.scale = normalize(
       lt.timer.getPctComplete(),
       0,
       1,
@@ -254,8 +327,8 @@ function ExhaustParticleSpawner(ecs) {
     /** @type {PhysicsBody} */
     const physics = entity.get(PhysicsBody);
 
-    if (exhaust.spawnTimer.isComplete() && physics.acc) {
-      const [eX, eY] = utils.getVector(physics.angle, -exhaust.r * 0.8);
+    if (exhaust.spawnTimer.isComplete() && (physics.acc || physics.accRev)) {
+      const [eX, eY] = getVector(physics.angle, -exhaust.r * 0.8);
       createExhaust(ecs, physics.x + eX, physics.y + eY);
       exhaust.spawnTimer.start();
     }
@@ -266,26 +339,32 @@ function ExhaustParticleSpawner(ecs) {
 
 /** @param {import('./ecs.js').ECS} ecs */
 function UnderworldLegionSpawner(ecs) {
-  this.update = () => {
-    if (!getPlayerEntity(ecs).get(Player).gameStarted) {
-      return;
-    }
+  const spawnShip = (minR, maxR, legion) => {
+    const r = randomInt(minR, maxR);
+    const angle = randomInt(0, 270) + 180 + 45;
+    const [x, y] = getVector(angle, r);
+    createEnemyShip(ecs, WORLD_WIDTH / 2 + x, WORLD_HEIGHT / 2 + y, 3);
+    legion.numEnemies++;
+  };
 
+  this.update = () => {
     const legionEntity = getLegion(ecs);
     /** @type {UnderworldLegion} */
     const legion = legionEntity.get(UnderworldLegion);
 
-    if (legion.waveTimer.isComplete()) {
-      console.log('SPAWN LEGION', legion.waveNumber + 5);
-      for (let i = 0; i < legion.waveNumber + 5; i++) {
-        const r = utils.randomInt(WORLD_WIDTH, WORLD_WIDTH * 1.5);
-        const angle = utils.randomInt(0, 359);
-        const [x, y] = utils.getVector(angle, r);
-        createEnemyShip(ecs, WORLD_WIDTH / 2 + x, WORLD_HEIGHT / 2 + y, 3);
-        console.log('create ship', WORLD_WIDTH / 2 + x, WORLD_HEIGHT / 2 + y);
+    if (isGameStarted(ecs)) {
+      if (legion.waveTimer.isComplete()) {
+        console.log('SPAWN LEGION', legion.waveNumber + 5);
+        for (let i = 0; i < legion.waveNumber + 5; i++) {
+          spawnShip(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion);
+        }
+        legion.waveNumber++;
+        legion.waveTimer.start();
       }
-      legion.waveNumber++;
-      legion.waveTimer.start();
+    } else if (legion.numEnemies <= 0) {
+      for (let i = 0; i < legion.waveNumber + 5; i++) {
+        spawnShip(0, WORLD_WIDTH / 2, legion);
+      }
     }
   };
 }
@@ -379,10 +458,10 @@ function TurretAI(ecs) {
       }
 
       for (const { offset } of ship.hitCircles) {
-        const [eX, eY] = utils.getVector(angle, offset);
+        const [eX, eY] = getVector(angle, offset);
         const circleX = x + eX;
         const circleY = y + eY;
-        const d = utils.distance(circleX, circleY, xTurret, yTurret);
+        const d = distance(circleX, circleY, xTurret, yTurret);
         targets.push([circleX, circleY, d]);
       }
     });
@@ -390,14 +469,14 @@ function TurretAI(ecs) {
     turrets.iterate((entity) => {
       /** @type {PhysicsBody} */
       const { x, y } = entity.get(PhysicsBody);
-      const d = utils.distance(x, y, xTurret, yTurret);
+      const d = distance(x, y, xTurret, yTurret);
       targets.push([x, y, d]);
     });
 
     const base = getBaseEntity(ecs);
     const basePhysics = base.get(PhysicsBody);
     const { x, y } = basePhysics;
-    const d = utils.distance(x, y, xTurret, yTurret);
+    const d = distance(x, y, xTurret, yTurret);
     targets.push([x, y, d]);
 
     for (let i = 0; i < targets.length; i++) {
@@ -418,7 +497,7 @@ function TurretAI(ecs) {
    */
   const acquirePlayerTarget = (turretX, turretY) => {
     const playerShipPhysics = getPlayerEntity(ecs).get(PhysicsBody);
-    const distToPlayer = utils.distance(
+    const distToPlayer = distance(
       turretX,
       turretY,
       playerShipPhysics.x,
@@ -442,7 +521,7 @@ function TurretAI(ecs) {
       if (timer.isComplete()) {
         timer.start();
         sprTimer.start();
-        const vec = utils.getVector(physics.angle, 16);
+        const vec = getVector(physics.angle, 16);
         createProjectile(ecs, type, {
           col:
             type === 'player'
@@ -492,28 +571,28 @@ function TurretAI(ecs) {
         continue;
       }
 
+      const player = getPlayerEntity(ecs).get(Player);
+      if (!isGameStarted(ecs) || player.gameOver) {
+        continue;
+      }
+
       if (updateTurret(turret, type, target)) {
         continue;
       }
     }
   };
 
-  /** @param {Entity} entity */
-  const updateStandaloneTurrets = (entity) => {
-    /** @type {Turret} */
-    const turret = entity.get(Turret);
-    const target = acquirePlayerTarget(turret.physics.x, turret.physics.y);
-    updateTurret(turret, 'enemy', target);
-  };
+  // /** @param {Entity} entity */
+  // const updateStandaloneTurrets = (entity) => {
+  //   /** @type {Turret} */
+  //   const turret = entity.get(Turret);
+  //   const target = acquirePlayerTarget(turret.physics.x, turret.physics.y);
+  //   updateTurret(turret, 'enemy', target);
+  // };
 
   this.update = () => {
-    const player = getPlayerEntity(ecs).get(Player);
-    if (!player.gameStarted || player.gameOver) {
-      return;
-    }
-
     ships.iterate(updateShipTurrets);
-    turrets.iterate(updateStandaloneTurrets);
+    // turrets.iterate(updateStandaloneTurrets);
   };
 }
 
@@ -527,17 +606,8 @@ function ShipAi(ecs) {
     const physics = entity.get(PhysicsBody);
 
     const playerShipPhysics = getPlayerEntity(ecs).get(PhysicsBody);
-    // const distToPlayer = utils.distance(
-    //   physics.x,
-    //   physics.y,
-    //   playerShipPhysics.x,
-    //   playerShipPhysics.y
-    // );
-
-    // if (distToPlayer < 500) {
     physics.turnTowards([playerShipPhysics.x, playerShipPhysics.y]);
     physics.acc = true;
-    // }
   };
 
   createSystem.bind(this)(selector, iterate);
@@ -594,8 +664,12 @@ function HitPointChecker(ecs) {
 
     if (hp.hp <= 0) {
       hp.hp = 0;
-      if (isPlayerEntity(entity) || isBaseEntity(entity)) {
-        const player = getPlayerEntity(ecs).get(Player);
+
+      if (isPlayerEntity(entity)) {
+        const playerEntity = getPlayerEntity(ecs);
+        const player = playerEntity.get(Player);
+        const playerRenderable = playerEntity.get(Renderable);
+        playerRenderable.highlighted = true;
         const ui = getUiEntity(ecs).get(Ui);
         if (ui.endTimer.isComplete() && !player.gameOver) {
           player.gameOver = true;
@@ -603,19 +677,37 @@ function HitPointChecker(ecs) {
           ui.endTimer.onCompletion().then(() => {
             newGame(ecs);
           });
-          for (let i = 0; i < 20; i++) {
-            setTimeout(
-              () =>
-                createExplosion(
-                  ecs,
-                  x + utils.randomInt(-32, 32),
-                  y + utils.randomInt(-32, 32)
-                ),
-              i * 150
-            );
-          }
+          // for (let i = 0; i < 20; i++) {
+          //   setTimeout(
+          //     () =>
+          //       createExplosion(
+          //         ecs,
+          //         x + utils.randomInt(-32, 32),
+          //         y + utils.randomInt(-32, 32)
+          //       ),
+          //     i * 150
+          //   );
+          // }
         }
         ui.endTimer.update();
+      } else if (isBaseEntity(entity)) {
+        entity.eject();
+        createExplosion(ecs, x, y);
+
+        /**
+         * @type {number[][]}
+         */
+        const usedCoords = [...getPlayerEntity(ecs).get(Player).usedCoords];
+        const ind = usedCoords.findIndex((c) => c[0] === x && c[1] === y);
+        if (ind > -1) {
+          usedCoords.splice(ind, 1);
+        }
+        const [baseX, baseY] = usedCoords[randomInt(0, usedCoords.length - 1)];
+        createBase(ecs, baseX, baseY);
+        const ui = getUiEntity(ecs).get(Ui);
+        ui.setText('A new Heart has spawned!');
+
+        getPlayerEntity(ecs).get(Player).crates += 5;
       } else {
         entity.eject();
         createExplosion(ecs, x, y);
@@ -629,6 +721,22 @@ function HitPointChecker(ecs) {
 
 /** @param {import('./ecs.js').ECS} ecs */
 function RenderUi(ecs) {
+  /**
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} pct
+   * @param {string} text
+   * @param {string} color
+   */
+  function renderHpBar(x, y, w, pct, text, color) {
+    draw.drawRect(x, y, w, 20, '#000');
+    draw.drawRect(x, y, w * pct, 20, color);
+    draw.drawText(text, x + 4, y + 11, {
+      align: 'left',
+    });
+  }
+
   /** */
   function renderGameUi() {
     const playerEntity = getPlayerEntity(ecs);
@@ -641,54 +749,38 @@ function RenderUi(ecs) {
     const baseHpPct = baseHp.hp / baseHp.maxHp;
 
     const hpWidth = 256;
-    const hpHeight = 20;
     const bottom = draw.height - 40;
     const playerHpX = 20;
     const baseHpX = draw.width - hpWidth - 20;
 
-    draw.drawRect(playerHpX, bottom, hpWidth, hpHeight, '#101E29');
-    draw.drawRect(
+    renderHpBar(
       playerHpX,
       bottom,
-      hpWidth * playerHpPct,
-      hpHeight,
+      hpWidth,
+      playerHpPct,
+      'Player HP',
       '#42CAFD'
     );
-    draw.drawText(
-      'Player HP: ' + Math.round(playerHpPct * 100),
-      playerHpX + 4,
-      bottom + 11,
-      {
-        align: 'left',
-      }
-    );
-    draw.drawRect(baseHpX, bottom, hpWidth, hpHeight, '#101E29');
-    draw.drawRect(baseHpX, bottom, hpWidth * baseHpPct, hpHeight, '#F47E1B');
-    draw.drawText(
-      'Heart HP: ' + Math.round(baseHpPct * 100),
-      baseHpX + 4,
-      bottom + 11,
-      {
-        align: 'left',
-      }
-    );
+    renderHpBar(baseHpX, bottom, hpWidth, baseHpPct, 'Heart HP', '#F47E1B');
 
     draw.drawText('Supplies: ' + player.crates, draw.width / 2, bottom + 11);
+
+    draw.drawText('Press 1: Upgrade Turret (5)', draw.width / 2 - 350, 11);
+    draw.drawText('Press 2: New Turret (20)', draw.width / 2, 11);
+    draw.drawText('Press 3: Repair (25)', draw.width / 2 + 350, 11);
   }
 
   this.update = () => {
+    /**
+     * @type {Ui}
+     */
     const ui = getUiEntity(ecs).get(Ui);
 
-    if (!ui.beginTimer.isComplete()) {
-      draw.drawText(
-        'Destroy the Heart of the Gods at any cost!',
-        draw.width / 2,
-        50,
-        {
-          // align: 'left',
-          size: 32,
-        }
-      );
+    if (!ui.textTimer.isComplete()) {
+      draw.drawText(ui.text, draw.width / 2, 150, {
+        // align: 'left',
+        size: 32,
+      });
     }
 
     if (!ui.endTimer.isComplete()) {
@@ -809,7 +901,7 @@ function RenderActors(ecs) {
     for (const { entity } of renderList) {
       const { x: x2, y: y2 } = entity.get(PhysicsBody);
       if (
-        utils.distance(x + w / 2, y + h / 2, x2, y2) <
+        distance(x + w / 2, y + h / 2, x2, y2) <
         draw.SCREEN_WIDTH / 2 + 160
       ) {
         drawEntity(entity);
@@ -819,18 +911,16 @@ function RenderActors(ecs) {
     // compass
     const { x: baseX, y: baseY } = getBaseEntity(ecs).get(PhysicsBody);
     const { x: playerX, y: playerY } = getPlayerEntity(ecs).get(PhysicsBody);
-    const angle = utils.getAngleTowards([playerX, playerY], [baseX, baseY]);
-    const [eX, eY] = utils.getVector(angle, 96);
-    const [eX2, eY2] = utils.getVector(angle, 64);
-
-    // draw.drawLine
-    draw.drawCircle(playerX + eX, playerY + eY, 2, 'red');
+    const angle = getAngleTowards([playerX, playerY], [baseX, baseY]);
+    const [eX, eY] = getVector(angle, 96);
+    const [eX2, eY2] = getVector(angle, 64);
+    draw.drawCircle(playerX + eX, playerY + eY, 2, '#FFF');
     draw.drawLine(
       playerX + eX2,
       playerY + eY2,
       playerX + eX,
       playerY + eY,
-      'red'
+      '#FFF'
     );
 
     ctx.restore();
@@ -892,13 +982,13 @@ function Collisions(ecs) {
     const ship2Physics = entity2.get(PhysicsBody);
 
     for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = utils.getVector(ship1Physics.angle, offset);
+      const [eX, eY] = getVector(ship1Physics.angle, offset);
       const { x, y } = ship1Physics;
 
-      const [eX2, eY2] = utils.getVector(ship2Physics.angle, 0);
+      const [eX2, eY2] = getVector(ship2Physics.angle, 0);
       const { x: x2, y: y2 } = ship2Physics;
 
-      if (utils.circleCollides([x + eX, y + eY, r], [x2 + eX2, y2 + eY2, 10])) {
+      if (circleCollides([x + eX, y + eY, r], [x2 + eX2, y2 + eY2, 10])) {
         entity2.get(HitPoints).hp = 0;
         return;
       }
@@ -937,7 +1027,7 @@ function Collisions(ecs) {
     }
 
     for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = utils.getVector(shipPhysics.angle, offset);
+      const [eX, eY] = getVector(shipPhysics.angle, offset);
       const { x, y } = shipPhysics;
 
       // console.log(
@@ -947,7 +1037,7 @@ function Collisions(ecs) {
       // );
 
       if (
-        utils.circleCollides(
+        circleCollides(
           [x + eX, y + eY, r],
           [projPhysics.x, projPhysics.y, circ.circle.r]
         )
@@ -974,7 +1064,7 @@ function Collisions(ecs) {
     const rect = islandEntity.get(HitRectangle);
 
     for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = utils.getVector(shipPhysics.angle, offset);
+      const [eX, eY] = getVector(shipPhysics.angle, offset);
 
       const { x, y, w, h } = rect.rect;
 
@@ -984,14 +1074,9 @@ function Collisions(ecs) {
       const rectX = x + w / 2;
       const rectY = y + h / 2;
 
-      if (
-        utils.circleCollides([shipX, shipY, r], [rectX, rectY, (w + 16) / 2])
-      ) {
-        const angleTowards = utils.getAngleTowards(
-          [rectX, rectY],
-          [shipX, shipY]
-        );
-        const [pushX, pushY] = utils.getVector(angleTowards, 1);
+      if (circleCollides([shipX, shipY, r], [rectX, rectY, (w + 16) / 2])) {
+        const angleTowards = getAngleTowards([rectX, rectY], [shipX, shipY]);
+        const [pushX, pushY] = getVector(angleTowards, 1);
         shipPhysics.x += pushX * 3;
         shipPhysics.y += pushY * 3;
       }
@@ -1024,7 +1109,7 @@ function Collisions(ecs) {
     const { x, y } = basePhysics;
 
     if (
-      utils.circleCollides(
+      circleCollides(
         [x, y, baseCirc.circle.r],
         [projPhysics.x, projPhysics.y, circ.circle.r]
       )
@@ -1055,11 +1140,11 @@ function Collisions(ecs) {
     const cratePhysics = crateEntity.get(PhysicsBody);
 
     for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = utils.getVector(shipPhysics.angle, offset);
+      const [eX, eY] = getVector(shipPhysics.angle, offset);
       const { x, y } = shipPhysics;
 
       if (
-        utils.circleCollides(
+        circleCollides(
           [x + eX, y + eY, r],
           [cratePhysics.x, cratePhysics.y, circ.circle.r]
         )
@@ -1099,7 +1184,7 @@ function Collisions(ecs) {
  * @param {import('./ecs.js').ECS} ecs
  * @returns {object[]}
  */
-export const get = (ecs) => {
+export const getSystems = (ecs) => {
   return [
     new Input(ecs),
     new UnderworldLegionSpawner(ecs),

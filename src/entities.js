@@ -22,7 +22,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from './components.js';
-import * as utils from './utils.js';
+import { Circ, distance, getVector, randomInt, Rect } from './utils.js';
 
 const Z_PLAYER = 10;
 const Z_WATER = 0;
@@ -45,6 +45,55 @@ export const getUiEntity = (ecs) => ecs.get(uiId);
 let legionId = '';
 export const getLegion = (ecs) => ecs.get(legionId);
 
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {number} minDist
+ * @param {number[][]} coords
+ * @returns {boolean}
+ */
+const isInvalidLocation = (x, y, minDist, coords) => {
+  for (const [x2, y2] of coords) {
+    const d = distance(x, y, x2, y2);
+    if (d < minDist) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * @param {number} minR
+ * @param {number} maxR
+ * @param {number} minDistBetween
+ * @param {number[][]} usedCoords
+ * @returns {number[]}
+ */
+export const generateCoords = (minR, maxR, minDistBetween, usedCoords) => {
+  let nextX;
+  let nextY;
+  let ctr = 0;
+  do {
+    const r = randomInt(minR, maxR);
+    const angle = randomInt(0, 270) + 180 + 45 - 360;
+    const [x, y] = getVector(angle, r);
+    nextX = WORLD_WIDTH / 2 + x;
+    nextY = WORLD_HEIGHT / 2 + y;
+    ctr++;
+  } while (
+    ctr < 10 &&
+    isInvalidLocation(nextX, nextY, minDistBetween, usedCoords)
+  );
+
+  if (ctr >= 10) {
+    return [0, 0];
+  }
+
+  const ret = [nextX, nextY];
+  usedCoords.push(ret);
+  return ret;
+};
+
 export const newGame = (ecs) => {
   ecs.reset();
 
@@ -52,22 +101,19 @@ export const newGame = (ecs) => {
   createWater(ecs);
   createUi(ecs);
   createLegion(ecs);
-  createEnemyShip(ecs, WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 500, 3);
 
-  const usedCoords = [];
+  const usedCoords = getPlayerEntity(ecs).get(Player).usedCoords;
   for (let i = 0; i < 35; i++) {
-    const [x, y] = utils.generateCoords(
-      64,
-      WORLD_WIDTH - 96,
-      64,
-      WORLD_HEIGHT - 96,
+    const [x, y] = generateCoords(
+      0,
+      (WORLD_WIDTH - 96) / 2,
       TILE_SCALE * 16 * 3,
       usedCoords
     );
     createIsland(ecs, x, y);
   }
 
-  const [baseX, baseY] = usedCoords[utils.randomInt(0, usedCoords.length - 1)];
+  const [baseX, baseY] = usedCoords[randomInt(0, usedCoords.length - 1)];
   createBase(ecs, baseX, baseY);
 };
 
@@ -80,7 +126,10 @@ export function createPlayer(ecs) {
     [2, 1, 0],
     [new Turret({ sprNum: 22, ms: 1000, dmg: 1, offset: 32, range: 300 })]
   );
-  const physics = new PhysicsBody(WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 256);
+  const physics = new PhysicsBody(
+    WORLD_WIDTH / 2,
+    WORLD_HEIGHT / 2 + WORLD_HEIGHT / 4
+  );
   const renderable = new Renderable({ ship, scale: 2, z: Z_PLAYER });
 
   const ent = ecs.create();
@@ -106,12 +155,11 @@ export const createBase = (ecs, x, y) => {
   const ent = ecs.create();
   ent.add(
     new Renderable({ scale: 6, z: Z_ISLAND_TURRET }),
-    new HitCircle(utils.Circ(x, y, 44)),
-    // new FlipRender(500),
+    new HitCircle(Circ(x, y, 44)),
     new SpriteListRender(['spr_21', 'spr_21_f'], 500),
     new PhysicsBody(x, y),
     new HitHighlightRender(),
-    new HitPoints(500)
+    new HitPoints(10)
   );
   baseId = ent.id;
 };
@@ -188,7 +236,7 @@ export const createEnemyTurret = (ecs, x, y, sprNum) => {
     turret,
     renderable,
     physics,
-    new HitCircle(utils.Circ(x, y, 32)),
+    new HitCircle(Circ(x, y, 32)),
     new HitHighlightRender(),
     new HitPoints(5)
   );
@@ -232,7 +280,7 @@ export const createExplosion = (ecs, x, y) => {
   const ent = ecs.create();
   ent.add(
     new Renderable({
-      circle: { r: 10, color: 'brown' },
+      circle: { r: 10, color: '#A05B53' },
       z: Z_EXHAUST,
     }),
     physics,
@@ -292,12 +340,7 @@ export const createIslandTile = (ecs, x, y, sprNum, scale, useHitRectangle) => {
 
     ent.add(
       new HitRectangle(
-        utils.Rect(
-          x - hitRectSize / 2,
-          y - hitRectSize / 2,
-          hitRectSize,
-          hitRectSize
-        )
+        Rect(x - hitRectSize / 2, y - hitRectSize / 2, hitRectSize, hitRectSize)
       )
     );
   }
@@ -339,7 +382,7 @@ export const createProjectile = (
   const physics = new PhysicsBody(x, y);
   physics.dragOn = false;
   physics.angle = angle;
-  const [vx, vy] = utils.getVector(angle, spd);
+  const [vx, vy] = getVector(angle, spd);
   physics.setV(vx, vy);
   ent.add(
     new Projectile(dmg, allegiance),
@@ -354,7 +397,7 @@ export const createProjectile = (
       duration: ms,
     }),
     physics,
-    new HitCircle(utils.Circ(x, y, 5))
+    new HitCircle(Circ(x, y, 5))
   );
 };
 
@@ -386,7 +429,7 @@ export const createCrate = (ecs, x, y) => {
     physics,
     new Crate(),
     new SpriteListRender(['spr_8', 'spr_9'], 400),
-    new HitCircle(utils.Circ(x, y, 16)),
+    new HitCircle(Circ(x, y, 16)),
     new LimitedLifetime({
       duration: 60 * 1000 * 2,
       scale: {

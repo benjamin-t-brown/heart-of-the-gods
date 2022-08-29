@@ -1,8 +1,8 @@
 // @ts-check
 
-import * as utils from './utils.js';
-import draw from './draw.js';
+import { draw } from './draw.js';
 import { createTile } from './entities.js';
+import { getAngleTowards, getVector, randomInt, Timer } from './utils.js';
 
 export const TILE_SCALE = 4;
 
@@ -21,6 +21,7 @@ export class PhysicsBody {
   angle = 0;
   angleRate = 2;
   acc = false;
+  accRev = false;
   accRate = 0.3;
   coeff = 0.1;
   dragOn = true;
@@ -59,7 +60,7 @@ export class PhysicsBody {
    * @param {[number, number]} pos
    */
   lookAt(pos) {
-    this.setAngle(utils.getAngleTowards([this.x, this.y], pos));
+    this.setAngle(getAngleTowards([this.x, this.y], pos));
   }
 
   /**
@@ -67,7 +68,7 @@ export class PhysicsBody {
    * @returns {boolean | undefined}
    */
   turnTowards(pos) {
-    const h = utils.getAngleTowards([this.x, this.y], pos);
+    const h = getAngleTowards([this.x, this.y], pos);
     if (this.angle <= h) {
       if (Math.abs(this.angle - h) < 180) {
         this.turn('r');
@@ -175,7 +176,7 @@ export class Renderable {
 }
 
 export class LimitedLifetime {
-  /** @type {utils.Timer} */
+  /** @type {Timer} */
   timer;
 
   /**
@@ -203,7 +204,7 @@ export class LimitedLifetime {
    * @param {MinMax} [args.scale]
    */
   constructor({ duration, scale, opacity }) {
-    this.timer = new utils.Timer(duration);
+    this.timer = new Timer(duration);
     this.opacity = opacity ?? this.opacity;
     this.scale = scale ?? this.scale;
   }
@@ -220,13 +221,13 @@ export class Turret {
    */
   constructor({ sprNum, ms, dmg, offset, range }) {
     this.sprNum = sprNum;
-    this.timer = new utils.Timer(ms);
-    this.sprTimer = new utils.Timer(100);
-    this.sprTimer.timestampStart = 0;
+    this.timer = new Timer(ms);
+    this.sprTimer = new Timer(100);
     this.dmg = dmg;
     this.offset = offset;
     this.physics = new PhysicsBody(0, 0);
     this.range = range;
+    this.level = 1;
   }
 }
 
@@ -248,6 +249,8 @@ export class Ship {
   /** @type {number[]} */
   spriteNumbs;
 
+  spriteR;
+
   /**
    * @param {number[]} sprites
    * @param {Turret[]} turrets
@@ -255,20 +258,67 @@ export class Ship {
    */
   constructor(sprites, turrets, spriteR = 16) {
     const numSprites = sprites.length;
-    let startingOffset = 0;
+    this.spriteNumbs = sprites;
+    this.turrets = turrets;
+    this.spriteR = spriteR;
+    this.buildHitCircles(numSprites);
+  }
 
+  /**
+   * @param {number} numSprites
+   */
+  buildHitCircles(numSprites) {
+    this.hitCircles = [];
+    let startingOffset = 0;
     if (numSprites > 1) {
-      startingOffset = -spriteR * (numSprites - 1);
+      startingOffset = -this.spriteR * (numSprites - 1);
     }
 
     for (let i = 0; i < numSprites; i++) {
       this.hitCircles.push({
         r: 16,
-        offset: i * (spriteR * 2) + startingOffset,
+        offset: i * (this.spriteR * 2) + startingOffset,
       });
     }
-    this.spriteNumbs = sprites;
-    this.turrets = turrets;
+  }
+
+  /** */
+  addTurret() {
+    this.turrets.push(
+      new Turret({
+        sprNum: 22,
+        ms: 1000,
+        dmg: 1,
+        offset: 32 * (this.turrets.length + 1),
+        range: 300,
+      })
+    );
+    const arr = this.spriteNumbs;
+    this.spriteNumbs = [...arr.slice(0, -2), 10, ...arr.slice(-2)];
+    this.buildHitCircles(this.spriteNumbs.length);
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  upgradeTurret() {
+    /** @type {any}*/
+    let lowestTurret;
+    for (const turret of this.turrets) {
+      if (!lowestTurret || turret.level < lowestTurret.level) {
+        lowestTurret = turret;
+      }
+    }
+    if (lowestTurret.level < 4) {
+      lowestTurret.level++;
+      lowestTurret.sprNum += 2;
+      lowestTurret.dmg++;
+      lowestTurret.range += 5;
+      lowestTurret.timer.start(lowestTurret.timer.duration - 100);
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -284,7 +334,7 @@ export class Ship {
     for (const i in this.hitCircles) {
       ret.push({
         r: this.hitCircles[i].r,
-        offset: utils.getVector(angle, this.hitCircles[i].offset),
+        offset: getVector(angle, this.hitCircles[i].offset),
         spr: 'spr_' + this.spriteNumbs[i],
       });
     }
@@ -307,7 +357,7 @@ export class Ship {
       const t = this.turrets[i];
       ret.push({
         ...t,
-        offset: utils.getVector(angle, this.hitCircles[i].offset),
+        offset: getVector(angle, this.hitCircles[i].offset),
         spr: 'spr_' + (t.sprNum + (t.sprTimer.isComplete() ? 0 : 1)),
       });
     }
@@ -321,6 +371,9 @@ export class Player {
   score = 0;
   crates = 0;
   gameOver = false;
+  gameStarted = false;
+  /** @type {number[][]}*/
+  usedCoords = [];
 
   /** @param {string} key */
   setKeyDown(key) {
@@ -333,7 +386,7 @@ export class Player {
 }
 
 export class Exhaust {
-  spawnTimer = new utils.Timer(100);
+  spawnTimer = new Timer(100);
   r;
   /** @param {number} r*/
   constructor(r) {
@@ -344,7 +397,7 @@ export class Exhaust {
 export class HitHighlightRender {
   /** */
   constructor() {
-    this.sprTimer = new utils.Timer(100);
+    this.sprTimer = new Timer(100);
     this.sprTimer.timestampStart = 0;
   }
 }
@@ -355,7 +408,7 @@ export class SpriteListRender {
    * @param {number} ms
    */
   constructor(sprites, ms) {
-    this.sprTimer = new utils.Timer(ms);
+    this.sprTimer = new Timer(ms);
     this.sprTimer.timestampStart = -9999;
 
     this.i = 0;
@@ -370,7 +423,7 @@ export class Water {
    * @typedef {object} Tile
    * @property {string} id
    * @property {number} spr
-   * @property {utils.Timer} timer
+   * @property {Timer} timer
    */
 
   /** @type {Tile[]} */
@@ -389,7 +442,7 @@ export class Water {
         const tile = {
           id: '',
           spr: 0,
-          timer: new utils.Timer(utils.randomInt(100, 20000)),
+          timer: new Timer(randomInt(100, 20000)),
         };
         this.tiles.push(tile);
         const id = createTile(
@@ -419,7 +472,7 @@ export class Water {
 
   /** @param {Tile} tile */
   resetTileTimer(tile) {
-    tile.timer.start(tile.spr === 0 ? utils.randomInt(5000, 20000) : 150);
+    tile.timer.start(tile.spr === 0 ? randomInt(5000, 20000) : 150);
   }
 }
 
@@ -453,7 +506,7 @@ export class HitPoints {
 export class UnderworldLegion {
   waveNumber = 0;
   numEnemies = 0;
-  waveTimer = new utils.Timer(30000);
+  waveTimer = new Timer(20000);
 
   /** */
   constructor() {
@@ -462,18 +515,27 @@ export class UnderworldLegion {
 }
 
 export class Ui {
-  beginTimer = new utils.Timer(5000);
-  endTimer = new utils.Timer(5000);
+  textTimer = new Timer(3000);
+  endTimer = new Timer(4000);
 
   /** */
   constructor() {
     this.endTimer.timestampStart = -9999;
+    this.text = '';
+  }
+
+  /**
+   * @param {string} text
+   */
+  setText(text) {
+    this.text = text;
+    this.textTimer.start();
   }
 }
 
 export class Crate {}
 
-export const get = () => {
+export const getComponents = () => {
   return [
     PhysicsBody,
     Renderable,

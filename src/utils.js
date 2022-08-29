@@ -1,4 +1,4 @@
-import zzfx from './zzfx.js';
+import { zzfx } from './zzfx.js';
 
 const getNow = () => window.performance.now();
 const timers = [];
@@ -263,61 +263,6 @@ export const randomInt = (n1, n2) => {
 export function normalize(x, a, b, c, d) {
   return c + ((x - a) * (d - c)) / (b - a);
 }
-
-/**
- * @param {number} x
- * @param {number} y
- * @param {number} minDist
- * @param {number[][]} coords
- * @returns {boolean}
- */
-const isInvalidLocation = (x, y, minDist, coords) => {
-  for (const [x2, y2] of coords) {
-    const d = distance(x, y, x2, y2);
-    if (d < minDist) {
-      return true;
-    }
-  }
-  return false;
-};
-
-/**
- * @param {number} minX
- * @param {number} maxX
- * @param {number} minY
- * @param {number} maxY
- * @param {number} minDistBetween
- * @param {number[][]} usedCoords
- * @returns {number[]}
- */
-export const generateCoords = (
-  minX,
-  maxX,
-  minY,
-  maxY,
-  minDistBetween,
-  usedCoords
-) => {
-  let nextX;
-  let nextY;
-  let ctr = 0;
-  do {
-    nextX = randomInt(minX, maxX);
-    nextY = randomInt(minY, maxY);
-    ctr++;
-  } while (
-    ctr < 10 &&
-    isInvalidLocation(nextX, nextY, minDistBetween, usedCoords)
-  );
-
-  if (ctr >= 10) {
-    return [0, 0];
-  }
-
-  const ret = [nextX, nextY];
-  usedCoords.push(ret);
-  return ret;
-};
 
 export const playSound = (soundName) => {
   const sounds = {};

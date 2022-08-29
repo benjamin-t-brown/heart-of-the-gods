@@ -1,24 +1,8 @@
-import draw from './draw.js';
-import ecs from './ecs.js';
-import {
-  Player,
-  Renderable,
-  PhysicsBody,
-  get as getComponents,
-  WORLD_WIDTH,
-  WORLD_HEIGHT,
-} from './components.js';
-import { get as getSystems } from './systems.js';
-import {
-  createBase,
-  createEnemyShip,
-  createIsland,
-  createLegion,
-  createPlayer,
-  createUi,
-  createWater,
-  newGame,
-} from './entities.js';
+import { draw } from './draw.js';
+import { ecs } from './ecs.js';
+import { getComponents } from './components.js';
+import { getSystems } from './systems.js';
+import { newGame } from './entities.js';
 
 console.log('index.js loaded');
 const EXPECTED_FS = 10;
@@ -30,6 +14,17 @@ export const start = () => {
   ecs.process(...getSystems(ecs));
 
   newGame(ecs);
+
+  // DEBUG, CENTER OF MAP
+  // const physics = new PhysicsBody(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+  // const renderable = new Renderable({
+  //   circle: {
+  //     r: 64,
+  //     color: 'pink',
+  //   },
+  //   z: 100,
+  // });
+  // ecs.create()?.add(renderable, physics);
 
   loop();
 };
@@ -66,7 +61,7 @@ const loop = () => {
     integrate(deltaTime);
 
     // }
-    draw.drawText('FS: ' + prevFrameTime, 20, 20, {
+    draw.drawText('FS: ' + prevFrameTime, 20, 50, {
       align: 'left',
     });
     // requestAnimationFrame(_loop);

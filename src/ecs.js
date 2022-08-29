@@ -197,7 +197,7 @@ let bit = 0;
 const perf = performance || Date;
 const now = perf.now.bind(perf);
 
-export default {
+export const ecs = {
   register(...Components) {
     Components.forEach((Component) => {
       // if (bit > 31) {

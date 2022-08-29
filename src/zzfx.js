@@ -6,11 +6,12 @@
 // You can use zzfxV to set volume.
 // Feel free to minify it further for your own needs!
 
-let zzfx, zzfxV, zzfxX;
+let _zzfx, zzfxV, zzfxX;
 
 // ZzFXMicro - Zuper Zmall Zound Zynth - v1.1.8 ~ 884 bytes minified
 zzfxV = 0.3; // volume
-zzfx = ( // play sound
+_zzfx = (
+  // play sound
   p = 1,
   k = 0.05,
   b = 220,
@@ -100,4 +101,4 @@ zzfx = ( // play sound
 };
 zzfxX = new (window.AudioContext || webkitAudioContext)(); // audio context
 
-export default zzfx;
+export const zzfx = _zzfx;

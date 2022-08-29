@@ -53,7 +53,7 @@ export const colors = {
 const DEFAULT_TEXT_PARAMS = {
   font: 'monospace',
   color: colors.WHITE,
-  size: 14,
+  size: 18,
   align: 'center',
   strokeColor: colors.BLACK,
 };
@@ -315,4 +315,4 @@ class Draw {
   }
 }
 
-export default new Draw();
+export const draw = new Draw();
