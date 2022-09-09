@@ -10,19 +10,14 @@ import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
   TILE_SCALE,
-  HitRectangle,
-  HitCircle,
-  Projectile,
   HitHighlightRender,
   Ai,
   HitPoints,
   Ui,
   SpriteListRender,
-  Crate,
   UnderworldLegion,
   Turret,
 } from './components.js';
-import { draw } from './draw.js';
 import {
   createBase,
   createCrate,
@@ -39,13 +34,19 @@ import {
   newGame,
 } from './entities.js';
 import {
-  circleCollides,
   distance,
-  getAngleTowards,
   getVector,
   normalize,
   randomInt,
+  createSystem,
+  isGameStarted,
+  playSound,
 } from './utils.js';
+import { Collisions } from './systems.collisions.js';
+import { Movement } from './systems.movement.js';
+import { RenderActors } from './systems.render-actors.js';
+import { RenderUi } from './systems.render-ui.js';
+import { Input } from './systems.input.js';
 
 /**
  * @typedef {object} Entity
@@ -59,219 +60,6 @@ import {
 
 const PLAYER_PROJECTILE_COLOR = '#42CAFD';
 const ENEMY_PROJECTILE_COLOR = '#F47E1B';
-
-/**
- * @param {any} selector
- * @param {(entity: object) => void} iterate
- * @returns {object}
- */
-function createSystem(selector, iterate) {
-  return Object.assign(this, {
-    update:
-      typeof selector === 'function'
-        ? selector
-        : () => selector.iterate(iterate),
-  });
-}
-
-/**
- * @param {import('./ecs.js').ECS} ecs
- * @returns {boolean}
- */
-function isGameStarted(ecs) {
-  return getPlayerEntity(ecs).get(Player).gameStarted;
-}
-
-/** @param {import('./ecs.js').ECS} ecs */
-function Input(ecs) {
-  const selector = ecs.select(Player, PhysicsBody, HitPoints);
-
-  /** @type {KeyboardEvent[]} */
-  let keysDown = [];
-  /** @type {KeyboardEvent[]} */
-  let keysUp = [];
-
-  window.addEventListener('keydown', (ev) => {
-    keysDown.push(ev);
-  });
-
-  window.addEventListener('keyup', (ev) => {
-    keysUp.push(ev);
-  });
-
-  /**
-   * @param {Player} player
-   * @param {PhysicsBody} physics
-   * @param {HitPoints} hp
-   */
-  const handleKeyUpdate = (player, physics, hp) => {
-    if (hp.hp <= 0 || getBaseEntity(ecs).get(HitPoints).hp <= 0) {
-      return;
-    }
-
-    let accelerating = false;
-    let acceleratingReverse = false;
-    const keys = player.keys;
-
-    if (keys.ArrowLeft || keys.a) {
-      physics.turn('l');
-    }
-    if (keys.ArrowRight || keys.d) {
-      physics.turn('r');
-    }
-    if (keys.ArrowUp || keys.w) {
-      accelerating = true;
-    }
-    if (!accelerating && (keys.ArrowDown || keys.s)) {
-      acceleratingReverse = true;
-    }
-
-    physics.acc = accelerating;
-    physics.accRev = acceleratingReverse;
-  };
-
-  /**
-   * @param {string} key
-   * @param {Player} player
-   * @param {Ship} ship
-   * @param {HitPoints} hp
-   */
-  function onKeyDown(key, player, ship, hp) {
-    const ui = getUiEntity(ecs).get(Ui);
-    const supplies = player.crates;
-
-    const assertCost = (cost) => {
-      if (supplies < cost) {
-        ui.setText(`Not enough supplies (need ${cost}).`);
-        return false;
-      } else {
-        player.crates -= cost;
-        return true;
-      }
-    };
-
-    if (key === '1') {
-      // upgrade turret
-      if (assertCost(5)) {
-        if (ship.upgradeTurret()) {
-          ui.setText('Turret upgraded!');
-        }
-      }
-    } else if (key === '2') {
-      // add new turret
-      if (assertCost(20)) {
-        ship.addTurret();
-        ui.setText('Turret added!');
-      }
-    } else if (key === '3') {
-      // heal ship
-      if (assertCost(25)) {
-        ship.addTurret();
-        ui.setText('Ship repaired!');
-        hp.hp += 10;
-        if (hp.hp > hp.maxHp) {
-          hp.hp = hp.maxHp;
-        }
-      }
-    }
-  }
-
-  /** @param {Entity} entity */
-  const iterate = (entity) => {
-    /** @type {Player} */
-    const player = entity.get(Player);
-    /** @type {PhysicsBody} */
-    const physics = entity.get(PhysicsBody);
-    /** @type {HitPoints} */
-    const hp = entity.get(HitPoints);
-
-    keysDown.forEach((ev) => {
-      if (!player.gameStarted) {
-        player.gameStarted = true;
-        const ui = getUiEntity(ecs).get(Ui);
-        ui.setText('Destroy the Hearts of the Gods!');
-      } else if (!player.gameOver) {
-        onKeyDown(ev.key, player, entity.get(Ship), hp);
-      }
-      player.setKeyDown(ev.key);
-    });
-    keysUp.forEach((ev) => {
-      player.setKeyUp(ev.key);
-    });
-
-    if (isGameStarted(ecs)) {
-      handleKeyUpdate(player, physics, hp);
-    }
-
-    if (keysUp.length) {
-      keysUp = [];
-    }
-    if (keysDown.length) {
-      keysDown = [];
-    }
-  };
-
-  createSystem.bind(this)(selector, iterate);
-}
-
-/** @param {import('./ecs.js').ECS} ecs */
-function Movement(ecs) {
-  const selector = ecs.select(PhysicsBody);
-
-  /**
-   * @param {PhysicsBody} physics
-   */
-  function applyDrag(physics) {
-    const frameRatio = draw.fm;
-    const coeff = physics.coeff;
-
-    let forceX = 0;
-    let forceY = 0;
-    // experimented with this for a while (linear/quadratic) this division by 2 gives
-    // a slidy-ness that I like
-    forceX = (coeff * physics.vx) / 2;
-    forceY = (coeff * physics.vy) / 2;
-
-    physics.vx -= (forceX / physics.mass) * frameRatio;
-    physics.vy -= (forceY / physics.mass) * frameRatio;
-  }
-
-  /** @param {Entity} entity */
-  const iterate = (entity) => {
-    /** @type {PhysicsBody} */
-    const physics = entity.get(PhysicsBody);
-
-    if (physics.acc || physics.accRev) {
-      const [ax, ay] = getVector(physics.angle, physics.accRate);
-      physics.ax = ax;
-      physics.ay = ay;
-      if (physics.accRev) {
-        physics.ax *= -0.5;
-        physics.ay *= -0.5;
-      }
-    }
-
-    const frameRatio = draw.fm;
-    const vxMod = (physics.ax / physics.mass) * frameRatio;
-    const vyMod = (physics.ay / physics.mass) * frameRatio;
-
-    physics.vx += vxMod;
-    physics.vy += vyMod;
-
-    if (physics.dragOn) {
-      applyDrag(physics);
-    }
-
-    physics.x += physics.vx * frameRatio;
-    physics.y += physics.vy * frameRatio;
-
-    physics.ax = 0.0;
-    physics.ay = 0.0;
-    physics.acc = false;
-  };
-
-  createSystem.bind(this)(selector, iterate);
-}
 
 /** @param {import('./ecs.js').ECS} ecs */
 function LimitedLifetimeUpdater(ecs) {
@@ -522,6 +310,7 @@ function TurretAI(ecs) {
         timer.start();
         sprTimer.start();
         const vec = getVector(physics.angle, 16);
+        playSound('shoot1');
         createProjectile(ecs, type, {
           col:
             type === 'player'
@@ -605,6 +394,11 @@ function ShipAi(ecs) {
     /** @type {PhysicsBody} */
     const physics = entity.get(PhysicsBody);
 
+    const player = getPlayerEntity(ecs).get(Player);
+    if (!isGameStarted(ecs) || player.gameOver) {
+      return;
+    }
+
     const playerShipPhysics = getPlayerEntity(ecs).get(PhysicsBody);
     physics.turnTowards([playerShipPhysics.x, playerShipPhysics.y]);
     physics.acc = true;
@@ -672,6 +466,7 @@ function HitPointChecker(ecs) {
         playerRenderable.highlighted = true;
         const ui = getUiEntity(ecs).get(Ui);
         if (ui.endTimer.isComplete() && !player.gameOver) {
+          playSound('end');
           player.gameOver = true;
           ui.endTimer.start();
           ui.endTimer.onCompletion().then(() => {
@@ -693,11 +488,15 @@ function HitPointChecker(ecs) {
       } else if (isBaseEntity(entity)) {
         entity.eject();
         createExplosion(ecs, x, y);
+        playSound('baseExpl');
+
+        /**@type {Player}*/
+        const player = getPlayerEntity(ecs).get(Player);
 
         /**
          * @type {number[][]}
          */
-        const usedCoords = [...getPlayerEntity(ecs).get(Player).usedCoords];
+        const usedCoords = [...player.usedCoords];
         const ind = usedCoords.findIndex((c) => c[0] === x && c[1] === y);
         if (ind > -1) {
           usedCoords.splice(ind, 1);
@@ -706,9 +505,11 @@ function HitPointChecker(ecs) {
         createBase(ecs, baseX, baseY);
         const ui = getUiEntity(ecs).get(Ui);
         ui.setText('A new Heart has spawned!');
+        player.score++;
 
         getPlayerEntity(ecs).get(Player).crates += 5;
       } else {
+        playSound('sink');
         entity.eject();
         createExplosion(ecs, x, y);
         createCrate(ecs, x, y);
@@ -717,467 +518,6 @@ function HitPointChecker(ecs) {
   };
 
   createSystem.bind(this)(selector, iterate);
-}
-
-/** @param {import('./ecs.js').ECS} ecs */
-function RenderUi(ecs) {
-  /**
-   * @param {number} x
-   * @param {number} y
-   * @param {number} w
-   * @param {number} pct
-   * @param {string} text
-   * @param {string} color
-   */
-  function renderHpBar(x, y, w, pct, text, color) {
-    draw.drawRect(x, y, w, 20, '#000');
-    draw.drawRect(x, y, w * pct, 20, color);
-    draw.drawText(text, x + 4, y + 11, {
-      align: 'left',
-    });
-  }
-
-  /** */
-  function renderGameUi() {
-    const playerEntity = getPlayerEntity(ecs);
-    const player = playerEntity.get(Player);
-
-    const playerHp = playerEntity.get(HitPoints);
-    const baseHp = getBaseEntity(ecs).get(HitPoints);
-
-    const playerHpPct = playerHp.hp / playerHp.maxHp;
-    const baseHpPct = baseHp.hp / baseHp.maxHp;
-
-    const hpWidth = 256;
-    const bottom = draw.height - 40;
-    const playerHpX = 20;
-    const baseHpX = draw.width - hpWidth - 20;
-
-    renderHpBar(
-      playerHpX,
-      bottom,
-      hpWidth,
-      playerHpPct,
-      'Player HP',
-      '#42CAFD'
-    );
-    renderHpBar(baseHpX, bottom, hpWidth, baseHpPct, 'Heart HP', '#F47E1B');
-
-    draw.drawText('Supplies: ' + player.crates, draw.width / 2, bottom + 11);
-
-    draw.drawText('Press 1: Upgrade Turret (5)', draw.width / 2 - 350, 11);
-    draw.drawText('Press 2: New Turret (20)', draw.width / 2, 11);
-    draw.drawText('Press 3: Repair (25)', draw.width / 2 + 350, 11);
-  }
-
-  this.update = () => {
-    /**
-     * @type {Ui}
-     */
-    const ui = getUiEntity(ecs).get(Ui);
-
-    if (!ui.textTimer.isComplete()) {
-      draw.drawText(ui.text, draw.width / 2, 150, {
-        // align: 'left',
-        size: 32,
-      });
-    }
-
-    if (!ui.endTimer.isComplete()) {
-      draw.drawText('Game over.', draw.width / 2, draw.height / 2, {
-        // align: 'left',
-        size: 48,
-      });
-    }
-
-    renderGameUi();
-
-    const playerEntity = getPlayerEntity(ecs);
-    const player = playerEntity.get(Player);
-    if (!player.gameStarted) {
-      draw.drawRect(0, 0, draw.width, draw.height, '#000');
-      draw.drawText(
-        'Press any button to start.',
-        draw.width / 2,
-        draw.height / 2,
-        {
-          // align: 'left',
-          size: 48,
-        }
-      );
-    }
-  };
-}
-
-/** @param {import('./ecs.js').ECS} ecs */
-function RenderActors(ecs) {
-  const sprites = ecs.select(PhysicsBody, Renderable);
-  const camera = ecs.select(Camera);
-
-  let renderList = [];
-
-  /**
-   * @param {{entity, z}[]} arr
-   * @param {{entity, z}} val
-   */
-  function addAndSort(arr, val) {
-    arr.push(val);
-    for (let i = arr.length - 1; i > 0 && arr[i].z < arr[i - 1].z; i--) {
-      const tmp = arr[i];
-      arr[i] = arr[i - 1];
-      arr[i - 1] = tmp;
-    }
-  }
-
-  /** @param {Entity} entity */
-  const drawEntity = (entity) => {
-    /** @type {PhysicsBody} */
-    const { x, y, angle } = entity.get(PhysicsBody);
-    /** @type {Renderable} */
-    const {
-      spriteName,
-      circle,
-      rectangle,
-      opacity,
-      scale,
-      flipped,
-      highlighted,
-      ship,
-    } = entity.get(Renderable);
-
-    let spritePostFix = '';
-    if (flipped) {
-      spritePostFix += '_f';
-    }
-    if (highlighted) {
-      spritePostFix += '_h';
-    }
-
-    draw.setOpacity(opacity);
-    if (spriteName) {
-      draw.drawSprite(spriteName + spritePostFix, x, y, angle, scale);
-    }
-    if (circle) {
-      const { r, color } = circle;
-      draw.drawCircle(x, y, r * scale, color);
-    }
-    if (rectangle) {
-      const { w, h, color } = rectangle;
-      draw.drawRect(x, y, w * scale, h * scale, color);
-    }
-    if (ship) {
-      const spriteList = ship.getHitCirclePositions(angle);
-      for (const {
-        offset: [eX, eY],
-        spr,
-      } of spriteList) {
-        draw.drawSprite(spr + spritePostFix, x + eX, y + eY, angle, scale);
-      }
-      const turretList = ship.getTurretPositions(angle);
-      for (const { spr, physics } of turretList) {
-        draw.drawSprite(spr, physics.x, physics.y, physics.angle, scale);
-      }
-    }
-    draw.setOpacity(1);
-  };
-
-  /** @param {Entity} entity */
-  const addToRenderList = (entity) => {
-    /** @type {Renderable} */
-    const renderable = entity.get(Renderable);
-    addAndSort(renderList, {
-      entity,
-      z: renderable.z,
-    });
-  };
-
-  /** @param {Entity} entity */
-  const drawRelativeToCamera = (entity) => {
-    /** @type {Camera} */
-    const { x, y, w, h } = entity.get(Camera);
-    const ctx = draw.getCtx();
-    ctx.save();
-    ctx.translate(-x, -y);
-    for (const { entity } of renderList) {
-      const { x: x2, y: y2 } = entity.get(PhysicsBody);
-      if (
-        distance(x + w / 2, y + h / 2, x2, y2) <
-        draw.SCREEN_WIDTH / 2 + 160
-      ) {
-        drawEntity(entity);
-      }
-    }
-
-    // compass
-    const { x: baseX, y: baseY } = getBaseEntity(ecs).get(PhysicsBody);
-    const { x: playerX, y: playerY } = getPlayerEntity(ecs).get(PhysicsBody);
-    const angle = getAngleTowards([playerX, playerY], [baseX, baseY]);
-    const [eX, eY] = getVector(angle, 96);
-    const [eX2, eY2] = getVector(angle, 64);
-    draw.drawCircle(playerX + eX, playerY + eY, 2, '#FFF');
-    draw.drawLine(
-      playerX + eX2,
-      playerY + eY2,
-      playerX + eX,
-      playerY + eY,
-      '#FFF'
-    );
-
-    ctx.restore();
-    renderList = [];
-  };
-
-  /** @type {any} */
-  const canvas = document.getElementById('canvasDiv');
-
-  this.update = () => {
-    canvas.style.filter = getPlayerEntity(ecs).get(Player).gameOver
-      ? 'grayscale(1)'
-      : '';
-
-    sprites.iterate(addToRenderList);
-    camera.iterate(drawRelativeToCamera);
-  };
-}
-
-/** @param {import('./ecs.js').ECS} ecs */
-function Collisions(ecs) {
-  const ships = ecs.select(Ship, PhysicsBody, HitHighlightRender, HitPoints);
-  const islands = ecs.select(HitRectangle, PhysicsBody);
-  const projectiles = ecs.select(HitCircle, PhysicsBody, Projectile);
-  const bases = ecs.select(
-    HitCircle,
-    PhysicsBody,
-    HitHighlightRender,
-    HitPoints
-  );
-  const crates = ecs.select(HitCircle, PhysicsBody, Crate);
-
-  // /**
-  //  * @param {PhysicsBody} physics
-  //  * @param {HitCircle} hitCircle
-  //  * @returns {number[]}
-  //  */
-  // function getCollisionCircle(physics, hitCircle) {}
-
-  /**
-   * @param {Entity} entity2
-   */
-  function checkShipPlayerCollisions(entity2) {
-    // if (entity1 === entity2 || isPlayerEntity(entity2)) {
-    //   return;
-    // }
-
-    const entity1 = getPlayerEntity(ecs);
-
-    if (entity1 === entity2) {
-      return;
-    }
-
-    /** @type {Ship} */
-    const ship1 = entity1.get(Ship);
-    /** @type {PhysicsBody} */
-    const ship1Physics = entity1.get(PhysicsBody);
-    /** @type {PhysicsBody} */
-    const ship2Physics = entity2.get(PhysicsBody);
-
-    for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = getVector(ship1Physics.angle, offset);
-      const { x, y } = ship1Physics;
-
-      const [eX2, eY2] = getVector(ship2Physics.angle, 0);
-      const { x: x2, y: y2 } = ship2Physics;
-
-      if (circleCollides([x + eX, y + eY, r], [x2 + eX2, y2 + eY2, 10])) {
-        entity2.get(HitPoints).hp = 0;
-        return;
-      }
-      // DEBUG
-      // draw.getCtx().save();
-      // draw.getCtx().translate(-camera.x, -camera.y);
-      // draw.drawCircle(x + eX, y + eY, hitCircle.r, 'rgba(255, 0, 0, 0.25)');
-      // draw.getCtx().restore();
-    }
-  }
-
-  /**
-   * @param {Entity} shipEntity
-   * @param {Entity} projectileEntity
-   */
-  function checkShipProjectileCollisions(shipEntity, projectileEntity) {
-    /** @type {Ship} */
-    const ship1 = shipEntity.get(Ship);
-    /** @type {PhysicsBody} */
-    const shipPhysics = shipEntity.get(PhysicsBody);
-    /** @type {HitHighlightRender} */
-    const shipHitHighlightRender = shipEntity.get(HitHighlightRender);
-
-    /** @type {HitCircle} */
-    const circ = projectileEntity.get(HitCircle);
-    /** @type {Projectile} */
-    const proj = projectileEntity.get(Projectile);
-    /** @type {PhysicsBody} */
-    const projPhysics = projectileEntity.get(PhysicsBody);
-
-    if (
-      (isPlayerEntity(shipEntity) && proj.allegiance === 'player') ||
-      (!isPlayerEntity(shipEntity) && proj.allegiance === 'enemy')
-    ) {
-      return;
-    }
-
-    for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = getVector(shipPhysics.angle, offset);
-      const { x, y } = shipPhysics;
-
-      // console.log(
-      //   'CHECK COLL',
-      //   [x + eX, y + eY, r],
-      //   [circ.circle.x, circ.circle.y, circ.circle.r]
-      // );
-
-      if (
-        circleCollides(
-          [x + eX, y + eY, r],
-          [projPhysics.x, projPhysics.y, circ.circle.r]
-        )
-      ) {
-        projectileEntity.eject();
-        shipHitHighlightRender.sprTimer.start();
-        shipEntity.get(HitPoints).hp -= proj.dmg;
-        return;
-      }
-    }
-  }
-
-  /**
-   * @param {Entity} shipEntity
-   * @param {Entity} islandEntity
-   */
-  function checkShipIslandCollisions(shipEntity, islandEntity) {
-    /** @type {Ship} */
-    const ship1 = shipEntity.get(Ship);
-    /** @type {PhysicsBody} */
-    const shipPhysics = shipEntity.get(PhysicsBody);
-
-    /** @type {HitRectangle} */
-    const rect = islandEntity.get(HitRectangle);
-
-    for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = getVector(shipPhysics.angle, offset);
-
-      const { x, y, w, h } = rect.rect;
-
-      const shipX = shipPhysics.x + eX;
-      const shipY = shipPhysics.y + eY;
-
-      const rectX = x + w / 2;
-      const rectY = y + h / 2;
-
-      if (circleCollides([shipX, shipY, r], [rectX, rectY, (w + 16) / 2])) {
-        const angleTowards = getAngleTowards([rectX, rectY], [shipX, shipY]);
-        const [pushX, pushY] = getVector(angleTowards, 1);
-        shipPhysics.x += pushX * 3;
-        shipPhysics.y += pushY * 3;
-      }
-    }
-  }
-
-  /**
-   * @param {Entity} baseEntity
-   * @param {Entity} projectileEntity
-   */
-  function checkBaseProjectileCollisions(baseEntity, projectileEntity) {
-    /** @type {PhysicsBody} */
-    const basePhysics = baseEntity.get(PhysicsBody);
-    /** @type {HitHighlightRender} */
-    const baseHitHighlightRender = baseEntity.get(HitHighlightRender);
-    /** @type {HitCircle} */
-    const baseCirc = projectileEntity.get(HitCircle);
-
-    /** @type {HitCircle} */
-    const circ = projectileEntity.get(HitCircle);
-    /** @type {Projectile} */
-    const proj = projectileEntity.get(Projectile);
-    /** @type {PhysicsBody} */
-    const projPhysics = projectileEntity.get(PhysicsBody);
-
-    if (proj.allegiance === 'enemy') {
-      return;
-    }
-
-    const { x, y } = basePhysics;
-
-    if (
-      circleCollides(
-        [x, y, baseCirc.circle.r],
-        [projPhysics.x, projPhysics.y, circ.circle.r]
-      )
-    ) {
-      projectileEntity.eject();
-      baseHitHighlightRender.sprTimer.start();
-      baseEntity.get(HitPoints).hp -= proj.dmg;
-      return;
-    }
-  }
-
-  /**
-   * @param {Entity} crateEntity
-   */
-  function checkCratePlayerCollisions(crateEntity) {
-    const playerEntity = getPlayerEntity(ecs);
-
-    /** @type {Ship} */
-    const ship1 = playerEntity.get(Ship);
-    /** @type {Player} */
-    const player = playerEntity.get(Player);
-    /** @type {PhysicsBody} */
-    const shipPhysics = playerEntity.get(PhysicsBody);
-
-    /** @type {HitCircle} */
-    const circ = crateEntity.get(HitCircle);
-    /** @type {PhysicsBody} */
-    const cratePhysics = crateEntity.get(PhysicsBody);
-
-    for (const { r, offset } of ship1.hitCircles) {
-      const [eX, eY] = getVector(shipPhysics.angle, offset);
-      const { x, y } = shipPhysics;
-
-      if (
-        circleCollides(
-          [x + eX, y + eY, r],
-          [cratePhysics.x, cratePhysics.y, circ.circle.r]
-        )
-      ) {
-        crateEntity.eject();
-        player.crates++;
-        return;
-      }
-    }
-  }
-
-  /**
-   * @param {Entity} shipEntity1
-   */
-  const checkCollisionsWithShip = (shipEntity1) => {
-    // setCamera();
-    islands.iterate(checkShipIslandCollisions.bind(this, shipEntity1));
-    projectiles.iterate(checkShipProjectileCollisions.bind(this, shipEntity1));
-  };
-
-  /**
-   * @param {Entity} baseEntity
-   */
-  const checkCollisionsWithBase = (baseEntity) => {
-    projectiles.iterate(checkBaseProjectileCollisions.bind(this, baseEntity));
-  };
-
-  this.update = () => {
-    ships.iterate(checkCollisionsWithShip);
-    ships.iterate(checkShipPlayerCollisions);
-    bases.iterate(checkCollisionsWithBase);
-    crates.iterate(checkCratePlayerCollisions);
-  };
 }
 
 /**

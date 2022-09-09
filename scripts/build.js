@@ -19,7 +19,7 @@ const execAsync = async (command) => {
   });
 };
 
-function getAllFiles(dirPath, arrayOfFiles) {
+function getAllFilePaths(dirPath, arrayOfFiles) {
   let files = fs.readdirSync(dirPath);
 
   arrayOfFiles = arrayOfFiles || [];
@@ -56,6 +56,22 @@ async function minifyFiles(filePaths, options) {
   });
 }
 
+function processCodeFile(text) {
+  // remove import statements
+  const lastLineInd = text.lastIndexOf('} from ');
+  let endImportsInd = lastLineInd;
+
+  if (lastLineInd > -1) {
+    while (text[endImportsInd] !== '\n') {
+      endImportsInd++;
+    }
+  }
+  const textWithoutImports = text.slice(endImportsInd + 1);
+
+  // remove export statements
+  return textWithoutImports.replace(/export /g, '').replace(/const /g, 'let ');
+}
+
 const build = async () => {
   console.log('Concat files...');
 
@@ -68,7 +84,7 @@ const build = async () => {
     `mkdir -p ${resDistDir} && cp -r ${__dirname}/../res/* ${resDistDir} || :`
   );
   await execAsync(
-    `mkdir -p ${srcDistDir} && cp -r ${__dirname}/../src/* ${srcDistDir} || :`
+    `mkdir -p ${srcDistDir}`
   );
 
   const terserOptions = {
@@ -83,9 +99,20 @@ const build = async () => {
   };
 
   console.log('\nMinify code...');
-  const files = getAllFiles(path.resolve(__dirname + '/../dist/src'));
+  const filePaths = getAllFilePaths(path.resolve(__dirname + '/../src'));
+  const indexFile = filePaths.reduce((resultFile, currentFilePath) => {
+    const currentFile = fs.readFileSync(currentFilePath).toString();
+    resultFile += processCodeFile(currentFile);
+    return resultFile;
+  }, '');
+
+  fs.writeFileSync(srcDistDir + '/index.js', indexFile);
+  
+  // console.log('RETURN EARLY');
+  // return;
+
   try {
-    await minifyFiles(files, terserOptions);
+    await minifyFiles([srcDistDir + '/index.js'], terserOptions);
   } catch (e) {
     console.error('Error during minify', e);
     return;

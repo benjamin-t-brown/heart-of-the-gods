@@ -10,6 +10,9 @@ let _zzfx, zzfxV, zzfxX;
 
 // ZzFXMicro - Zuper Zmall Zound Zynth - v1.1.8 ~ 884 bytes minified
 zzfxV = 0.3; // volume
+export const setVolume = (v) => {
+  zzfxV = v;
+};
 _zzfx = (
   // play sound
   p = 1,

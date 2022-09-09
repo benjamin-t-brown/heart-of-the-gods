@@ -8,10 +8,7 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "isolatedModules": false,
-    "lib": [
-      "dom",
-      "ES2017"
-    ],
+    "lib": ["dom", "ES2017"],
     "removeComments": true,
     "sourceMap": false,
     "forceConsistentCasingInFileNames": true,
@@ -19,13 +16,12 @@
     "noImplicitAny": false,
     "experimentalDecorators": false,
     "esModuleInterop": true,
-    "checkJs": true
+    "checkJs": false,
+    "jsx": "react",
+    "jsxFactory": "h",
+    "jsxFragmentFactory": "Fragment"
   },
   "references": [],
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "scripts/**/*"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["scripts/**/*"]
 }

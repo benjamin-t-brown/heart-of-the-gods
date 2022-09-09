@@ -130,6 +130,7 @@ export function createPlayer(ecs) {
     WORLD_WIDTH / 2,
     WORLD_HEIGHT / 2 + WORLD_HEIGHT / 4
   );
+  physics.angleRate = 4;
   const renderable = new Renderable({ ship, scale: 2, z: Z_PLAYER });
 
   const ent = ecs.create();

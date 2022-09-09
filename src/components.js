@@ -515,8 +515,16 @@ export class UnderworldLegion {
 }
 
 export class Ui {
+  costUpgrade = 5;
+  costNew = 10;
+  costHeal = 5;
+
   textTimer = new Timer(3000);
   endTimer = new Timer(4000);
+
+  textFlashTimer = new Timer(250);
+  textFlashI = -1;
+  textFlashColor = '';
 
   /** */
   constructor() {
@@ -530,6 +538,16 @@ export class Ui {
   setText(text) {
     this.text = text;
     this.textTimer.start();
+  }
+
+  /**
+   * @param {number} i
+   * @param {string} c
+   */
+  setTextFlash(i, c) {
+    this.textFlashTimer.start();
+    this.textFlashI = i;
+    this.textFlashColor = c;
   }
 }
 

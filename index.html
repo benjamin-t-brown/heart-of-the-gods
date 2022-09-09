@@ -4,6 +4,7 @@
       body {
         background: #333;
         margin: 0px;
+        font-family: Arial, Helvetica, sans-serif;
       }
       canvas {
         border: 1px solid white;
@@ -11,11 +12,20 @@
       #canvasDiv {
         display: flex;
         justify-content: center;
+        flex-direction: column;
         align-items: center;
         height: 100%;
       }
+      #canvasDiv>div {
+        color: white;
+        display: flex;
+        align-items: center;
+        margin: 4px;
+      }
     </style>
-    <div id="canvasDiv"></div>
+    <div id="canvasDiv">
+      <div>Volume: <input id="volume" type="range" min="0" max="100" value="100"></input></div>
+    </div>
     <script src="src/index.js" type="module"></script>
   </body>
 </html>

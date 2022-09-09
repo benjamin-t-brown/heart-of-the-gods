@@ -41,17 +41,17 @@ const loadImage = (imageName, imagePath) => {
 export const colors = {
   WHITE: '#F8F8F8',
   BLACK: '#111',
-  //   GREY: '#8D87A2',
+  GREY: '#8D87A2',
   //   BLUE: '#42CAFD',
-  //   RED: '#E1534A',
+  RED: '#E1534A',
   //   YELLOW: '#FFCE00',
-  //   GREEN: '#71AA34',
+  GREEN: '#71AA34',
   //   PURPLE: '#8E478C',
 };
 
 /** @type {DrawTextParams} */
 const DEFAULT_TEXT_PARAMS = {
-  font: 'monospace',
+  font: 'Arial',
   color: colors.WHITE,
   size: 18,
   align: 'center',
