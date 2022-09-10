@@ -78,14 +78,15 @@ const build = async () => {
   let htmlFile = fs.readFileSync(`${__dirname}/../index.html`).toString();
 
   const resDistDir = path.resolve(`${__dirname}/../dist/res/`);
+
   const srcDistDir = path.resolve(`${__dirname}/../dist/src/`);
 
-  await execAsync(
-    `mkdir -p ${resDistDir} && cp -r ${__dirname}/../res/* ${resDistDir} || :`
-  );
-  await execAsync(
-    `mkdir -p ${srcDistDir}`
-  );
+  console.log('Mkdir');
+  fs.mkdirSync(resDistDir, { recursive: true });
+  fs.mkdirSync(srcDistDir, { recursive: true });
+  console.log('Copy');
+  await execAsync(` cp -r ${__dirname}/../res/* ${resDistDir}`);
+  // await execAsync(`mkdir --parents ${srcDistDir}`);
 
   const terserOptions = {
     passes: 3,
@@ -107,7 +108,7 @@ const build = async () => {
   }, '');
 
   fs.writeFileSync(srcDistDir + '/index.js', indexFile);
-  
+
   // console.log('RETURN EARLY');
   // return;
 
