@@ -46,6 +46,7 @@ export const colors = {
   RED: '#E1534A',
   //   YELLOW: '#FFCE00',
   GREEN: '#71AA34',
+  LIGHTGREEN: '#FBFCAA',
   //   PURPLE: '#8E478C',
 };
 

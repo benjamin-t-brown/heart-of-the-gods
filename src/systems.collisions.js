@@ -8,9 +8,17 @@ import {
   HitHighlightRender,
   HitPoints,
   Crate,
+  Ghost,
+  Camera,
 } from './components.js';
+import { draw } from './draw.js';
 import { getPlayerEntity, isPlayerEntity } from './entities.js';
-import { circleCollides, getAngleTowards, getVector, playSound } from './utils.js';
+import {
+  circleCollides,
+  getAngleTowards,
+  getVector,
+  playSound,
+} from './utils.js';
 
 /** @param {import('./ecs.js').ECS} ecs */
 export function Collisions(ecs) {
@@ -24,6 +32,7 @@ export function Collisions(ecs) {
     HitPoints
   );
   const crates = ecs.select(HitCircle, PhysicsBody, Crate);
+  const ghosts = ecs.select(HitCircle, PhysicsBody, Ghost);
 
   // /**
   //  * @param {PhysicsBody} physics
@@ -233,6 +242,106 @@ export function Collisions(ecs) {
   }
 
   /**
+   * @param {import('./systems.js').Entity} ghostEntity
+   */
+  function checkGhostPlayerCollisions(ghostEntity) {
+    const playerEntity = getPlayerEntity(ecs);
+
+    /** @type {Ship} */
+    const ship1 = playerEntity.get(Ship);
+    /** @type {PhysicsBody} */
+    const shipPhysics = playerEntity.get(PhysicsBody);
+    /** @type {HitHighlightRender} */
+    const shipHitHighlightRender = playerEntity.get(HitHighlightRender);
+
+    /** @type {HitCircle} */
+    const circ = ghostEntity.get(HitCircle);
+    /** @type {PhysicsBody} */
+    const ghostPhysics = ghostEntity.get(PhysicsBody);
+    /** @type {Ghost} */
+    const ghost = ghostEntity.get(Ghost);
+
+    // DEBUG
+    // const camera = ecs.select(Camera).list.entity.get(Camera);
+    // draw.getCtx().save();
+    // draw.getCtx().translate(-camera.x, -camera.y);
+    // draw.drawCircle(
+    //   ghostPhysics.x,
+    //   ghostPhysics.y,
+    //   circ.circle.r,
+    //   'rgba(255, 0, 0, 0.25)'
+    // );
+    // draw.getCtx().restore();
+
+    if (!ghost.hitTimer.isComplete()) {
+      return;
+    }
+
+    for (const { r, offset } of ship1.hitCircles) {
+      const [eX, eY] = getVector(shipPhysics.angle, offset);
+      const { x, y } = shipPhysics;
+
+      if (
+        circleCollides(
+          [x + eX, y + eY, r],
+          [ghostPhysics.x, ghostPhysics.y, circ.circle.r]
+        )
+      ) {
+        ghost.hitTimer.start();
+        shipHitHighlightRender.sprTimer.start();
+        playerEntity.get(HitPoints).hp -= 3;
+        playSound('hit1');
+        return;
+      }
+    }
+  }
+
+  /**
+   * @param {import('./systems.js').Entity} ghostEntity
+   * @param {import('./systems.js').Entity} projectileEntity
+   */
+  function checkGhostProjectileCollisions(ghostEntity, projectileEntity) {
+    /** @type {PhysicsBody} */
+    const ghostPhysics = ghostEntity.get(PhysicsBody);
+    /** @type {HitHighlightRender} */
+    const ghostHitHighlightRender = ghostEntity.get(HitHighlightRender);
+    /** @type {HitCircle} */
+    const ghostCirc = ghostEntity.get(HitCircle);
+
+    /** @type {HitCircle} */
+    const circ = projectileEntity.get(HitCircle);
+    /** @type {Projectile} */
+    const proj = projectileEntity.get(Projectile);
+    /** @type {PhysicsBody} */
+    const projPhysics = projectileEntity.get(PhysicsBody);
+
+    if (proj.allegiance === 'enemy') {
+      return;
+    }
+
+    const { x, y } = ghostPhysics;
+
+    // console.log(
+    //   'check proj',
+    //   [x, y, ghostCirc.circle.r],
+    //   [projPhysics.x, projPhysics.y, circ.circle.r]
+    // );
+
+    if (
+      circleCollides(
+        [x, y, ghostCirc.circle.r],
+        [projPhysics.x, projPhysics.y, circ.circle.r]
+      )
+    ) {
+      projectileEntity.eject();
+      ghostHitHighlightRender.sprTimer.start();
+      ghostEntity.get(HitPoints).hp -= proj.dmg;
+      playSound('hit2');
+      return;
+    }
+  }
+
+  /**
    * @param {import('./systems.js').Entity} shipEntity1
    */
   const checkCollisionsWithShip = (shipEntity1) => {
@@ -248,10 +357,19 @@ export function Collisions(ecs) {
     projectiles.iterate(checkBaseProjectileCollisions.bind(this, baseEntity));
   };
 
+  /**
+   * @param {import('./systems.js').Entity} ghostEntity
+   */
+  const checkCollisionsWithGhost = (ghostEntity) => {
+    projectiles.iterate(checkGhostProjectileCollisions.bind(this, ghostEntity));
+  };
+
   this.update = () => {
     ships.iterate(checkCollisionsWithShip);
     ships.iterate(checkShipPlayerCollisions);
     bases.iterate(checkCollisionsWithBase);
     crates.iterate(checkCratePlayerCollisions);
+    ghosts.iterate(checkGhostPlayerCollisions);
+    ghosts.iterate(checkCollisionsWithGhost);
   };
 }

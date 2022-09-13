@@ -16,7 +16,7 @@
     "noImplicitAny": false,
     "experimentalDecorators": false,
     "esModuleInterop": true,
-    "checkJs": false,
+    "checkJs": true,
     "jsx": "react",
     "jsxFactory": "h",
     "jsxFragmentFactory": "Fragment"

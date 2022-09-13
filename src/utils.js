@@ -1,4 +1,5 @@
 import { Player } from './components.js';
+import { draw } from './draw.js';
 import { getPlayerEntity } from './entities.js';
 import { setVolume, zzfx } from './zzfx.js';
 
@@ -99,6 +100,51 @@ export class Timer {
       diff = -1;
     }
     return Math.min(1, diff / this.duration);
+  }
+}
+
+export class Gauge {
+  /**
+   * @param {number} max
+   * @param {number} rate
+   */
+  constructor(max, rate) {
+    this.max = max;
+    this.current = 0;
+    this.decayRate = rate;
+  }
+
+  /**
+   * @param {number} x
+   */
+  fill(x) {
+    this.current += x;
+    if (this.current > this.max) {
+      this.current = this.max;
+    }
+  }
+  /***/
+  empty() {
+    this.current = 0;
+  }
+  /**
+   * @returns {boolean}
+   */
+  isFull() {
+    return this.current >= this.max;
+  }
+  /**
+   * @returns {number}
+   */
+  getPct() {
+    return this.current / this.max;
+  }
+  /***/
+  update() {
+    this.current -= this.decayRate * draw.fm;
+    if (this.current < 0) {
+      this.current = 0;
+    }
   }
 }
 
@@ -507,6 +553,7 @@ const sounds = {
   ],
   // exh: [2.02,,260,,.04,.01,,2.24,,13,-27,.02,.02,,-86,,.5,.92,.03,.55],
   exh: [0.2, 1, 100, , 0.02, 0, 4, 0, , 36, , , , , 8.4, -1, 0.13, , 0.15],
+  exh2: [0.4, 1, 100, , 0.02, 0, 4, 0, , 36, , , , , 8.4, -1.4, 0.13, 0, 0.15],
   hit1: [
     1.11,
     ,
@@ -531,21 +578,45 @@ const sounds = {
   ],
   hit2: [, , 245, 0.01, , 0.16, 4, 2.46, 2.5, , , , , 1.7, , , , 0.46, 0.02],
   crate: [, , 1727, 0.02, 0.01, 0.01, 3, 0.33, , , 108, 0.14, , , , 0.2],
+  ghost: [
+    2.18,
+    ,
+    1258,
+    0.01,
+    0.08,
+    0.12,
+    2,
+    1.19,
+    -0.3,
+    -8.5,
+    -437,
+    0.01,
+    0.09,
+    ,
+    ,
+    ,
+    0.09,
+    0.57,
+    0.01,
+    0.17,
+  ],
   /* eslint-enable */
 };
 
-let volume = 0;
+let volume = 1;
 export const playSound = (soundName) => {
   const arr = sounds[soundName];
   if (!arr) {
     throw new Error('no sound: ' + soundName);
   }
   // eslint-disable-next-line
-  setVolume(volume * 0.3);
+  setVolume(volume * 0.2);
   zzfx(...arr);
 };
 
+// @ts-ignore
 document.getElementById('volume').addEventListener('change', (ev) => {
+  // @ts-ignore
   volume = Number(ev.target.value) / 100;
   playSound('coll');
 });

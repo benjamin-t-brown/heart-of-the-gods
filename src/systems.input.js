@@ -1,4 +1,5 @@
 import {
+  Boost,
   Exhaust,
   HitPoints,
   PhysicsBody,
@@ -34,8 +35,9 @@ export function Input(ecs) {
    * @param {PhysicsBody} physics
    * @param {HitPoints} hp
    * @param {Exhaust} exhaust
+   * @param {Boost} boost
    */
-  const handleKeyUpdate = (player, physics, hp, exhaust) => {
+  const handleKeyUpdate = (player, physics, hp, exhaust, boost) => {
     if (hp.hp <= 0 || getBaseEntity(ecs).get(HitPoints).hp <= 0) {
       return;
     }
@@ -53,10 +55,15 @@ export function Input(ecs) {
     if (keys.ArrowUp || keys.w) {
       accelerating = true;
     }
+    if (keys.Shift) {
+      boost.enabled = true;
+      accelerating = true;
+    } else {
+      boost.enabled = false;
+    }
     if (!accelerating && (keys.ArrowDown || keys.s)) {
       acceleratingReverse = true;
     }
-
     physics.acc = accelerating;
     physics.accRev = acceleratingReverse;
 
@@ -65,7 +72,7 @@ export function Input(ecs) {
       exhaust.spawnTimer.isComplete()
     ) {
       if (spawnNoiseCtr % 2) {
-        playSound('exh');
+        playSound(boost.enabled && !boost.onCooldown ? 'exh2' : 'exh');
       }
       spawnNoiseCtr++;
     }
@@ -151,10 +158,16 @@ export function Input(ecs) {
 
     keysDown.forEach((ev) => {
       if (!player.gameStarted) {
-        player.gameStarted = true;
-        const ui = getUiEntity(ecs).get(Ui);
-        ui.setText('Destroy the Hearts of the Gods!');
-        playSound('start');
+        if (!player.firstScreenUiVisible) {
+          playSound('hit1');
+          player.firstScreenUiVisible = true;
+        } else {
+          player.firstScreenUiVisible = false;
+          player.gameStarted = true;
+          const ui = getUiEntity(ecs).get(Ui);
+          ui.setText('Destroy the Hearts of the Gods!');
+          playSound('start');
+        }
       } else if (!player.gameOver) {
         onKeyDown(ev.key, player, entity.get(Ship), hp);
       }
@@ -165,7 +178,13 @@ export function Input(ecs) {
     });
 
     if (isGameStarted(ecs)) {
-      handleKeyUpdate(player, physics, hp, entity.get(Exhaust));
+      handleKeyUpdate(
+        player,
+        physics,
+        hp,
+        entity.get(Exhaust),
+        entity.get(Boost)
+      );
     }
 
     if (keysUp.length) {

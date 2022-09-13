@@ -37,6 +37,7 @@ export function RenderActors(ecs) {
       flipped,
       highlighted,
       ship,
+      useHeading,
     } = entity.get(Renderable);
 
     let spritePostFix = '';
@@ -49,7 +50,13 @@ export function RenderActors(ecs) {
 
     draw.setOpacity(opacity);
     if (spriteName) {
-      draw.drawSprite(spriteName + spritePostFix, x, y, angle, scale);
+      draw.drawSprite(
+        spriteName + spritePostFix,
+        x,
+        y,
+        useHeading ? angle : 0,
+        scale
+      );
     }
     if (circle) {
       const { r, color } = circle;

@@ -17,6 +17,8 @@ import {
   SpriteListRender,
   UnderworldLegion,
   Turret,
+  Boost,
+  Ghost,
 } from './components.js';
 import {
   createBase,
@@ -24,6 +26,7 @@ import {
   createEnemyShip,
   createExhaust,
   createExplosion,
+  createGhost,
   createProjectile,
   getBaseEntity,
   getLegion,
@@ -45,21 +48,19 @@ import {
 import { Collisions } from './systems.collisions.js';
 import { Movement } from './systems.movement.js';
 import { RenderActors } from './systems.render-actors.js';
-import { RenderUi } from './systems.render-ui.js';
+import { RenderUi, setLastScore } from './systems.render-ui.js';
 import { Input } from './systems.input.js';
+import { TurretAI } from './systems.turret.js';
 
 /**
  * @typedef {object} Entity
  * @property {number} id
  * @property {(a: object) => object} get
- * @property {(a: object) => void} has
+ * @property {(a: object) => boolean} has
  * @property {(...a: object[]) => void} add
  * @property {(...a: object[]) => void} remove
  * @property {() => void} eject
  */
-
-const PLAYER_PROJECTILE_COLOR = '#42CAFD';
-const ENEMY_PROJECTILE_COLOR = '#F47E1B';
 
 /** @param {import('./ecs.js').ECS} ecs */
 function LimitedLifetimeUpdater(ecs) {
@@ -117,7 +118,7 @@ function ExhaustParticleSpawner(ecs) {
 
     if (exhaust.spawnTimer.isComplete() && (physics.acc || physics.accRev)) {
       const [eX, eY] = getVector(physics.angle, -exhaust.r * 0.8);
-      createExhaust(ecs, physics.x + eX, physics.y + eY);
+      createExhaust(ecs, physics.x + eX, physics.y + eY, exhaust.c);
       exhaust.spawnTimer.start();
     }
   };
@@ -127,31 +128,80 @@ function ExhaustParticleSpawner(ecs) {
 
 /** @param {import('./ecs.js').ECS} ecs */
 function UnderworldLegionSpawner(ecs) {
-  const spawnShip = (minR, maxR, legion) => {
+  const spawnSomething = (minR, maxR, legion, type, shipNum) => {
     const r = randomInt(minR, maxR);
     const angle = randomInt(0, 270) + 180 + 45;
     const [x, y] = getVector(angle, r);
-    createEnemyShip(ecs, WORLD_WIDTH / 2 + x, WORLD_HEIGHT / 2 + y, 3);
+    if (type === 'ship') {
+      createEnemyShip(ecs, WORLD_WIDTH / 2 + x, WORLD_HEIGHT / 2 + y, shipNum);
+    } else if (type === 'ghost') {
+      createGhost(
+        ecs,
+        Math.random() > 0.5 ? -100 : WORLD_WIDTH + 100,
+        WORLD_HEIGHT / 2 + y
+      );
+    }
     legion.numEnemies++;
   };
 
   this.update = () => {
+    const player = getPlayerEntity(ecs).get(Player);
+    if (player.gameOver) {
+      return;
+    }
+
     const legionEntity = getLegion(ecs);
     /** @type {UnderworldLegion} */
     const legion = legionEntity.get(UnderworldLegion);
 
     if (isGameStarted(ecs)) {
       if (legion.waveTimer.isComplete()) {
-        console.log('SPAWN LEGION', legion.waveNumber + 5);
-        for (let i = 0; i < legion.waveNumber + 5; i++) {
-          spawnShip(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion);
-        }
+        console.log(
+          'SPAWN LEGION',
+          legion.waveNumber +
+            5 -
+            legion.numEnemies2 -
+            legion.numEnemies3 -
+            legion.numEnemies4
+        );
+        const numBasicShips = legion.waveNumber + 5;
+        legion.numEnemies2 - legion.numEnemies3 - legion.numEnemies4;
+
         legion.waveNumber++;
         legion.waveTimer.start();
+        if (legion.waveNumber % 4 === 0) {
+          for (let i = 0; i < legion.waveNumber / 4; i++) {
+            spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ghost');
+          }
+        }
+
+        if (legion.waveNumber % 3 === 0) {
+          legion.numEnemies2++;
+        }
+        if (legion.waveNumber % 3 === 0 && legion.numEnemies2 > 1) {
+          legion.numEnemies3++;
+        }
+        if (legion.waveNumber % 3 === 0 && legion.numEnemies3 > 1) {
+          legion.numEnemies4++;
+        }
+
+        for (let i = 0; i < numBasicShips; i++) {
+          console.log('SPAWN SHIP');
+          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 1);
+        }
+        for (let i = 0; i < legion.numEnemies2; i++) {
+          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 2);
+        }
+        for (let i = 0; i < legion.numEnemies2; i++) {
+          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 3);
+        }
+        for (let i = 0; i < legion.numEnemies2; i++) {
+          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 4);
+        }
       }
     } else if (legion.numEnemies <= 0) {
-      for (let i = 0; i < legion.waveNumber + 5; i++) {
-        spawnShip(0, WORLD_WIDTH / 2, legion);
+      for (let i = 0; i < legion.waveNumber + 3; i++) {
+        spawnSomething(0, WORLD_WIDTH / 2, legion, 'ship', 1);
       }
     }
   };
@@ -218,175 +268,7 @@ function SpriteListFlipper(ecs) {
 }
 
 /** @param {import('./ecs.js').ECS} ecs */
-function TurretAI(ecs) {
-  const ships = ecs.select(Ship, PhysicsBody, HitPoints);
-  const turrets = ecs.select(Turret, PhysicsBody);
-
-  /**
-   * @param {number} xTurret
-   * @param {number} yTurret
-   * @param {Entity} owningEntity
-   * @returns {number[] | null}
-   */
-  const getClosestTarget = (xTurret, yTurret, owningEntity) => {
-    let closestDist = Infinity;
-    /** @type {number[]}*/
-    let ret = [];
-
-    let targets = [];
-
-    ships.iterate((entity) => {
-      /** @type {Ship} */
-      const ship = entity.get(Ship);
-      /** @type {PhysicsBody} */
-      const { angle, x, y } = entity.get(PhysicsBody);
-
-      if (entity.id === owningEntity.id) {
-        return;
-      }
-
-      for (const { offset } of ship.hitCircles) {
-        const [eX, eY] = getVector(angle, offset);
-        const circleX = x + eX;
-        const circleY = y + eY;
-        const d = distance(circleX, circleY, xTurret, yTurret);
-        targets.push([circleX, circleY, d]);
-      }
-    });
-
-    turrets.iterate((entity) => {
-      /** @type {PhysicsBody} */
-      const { x, y } = entity.get(PhysicsBody);
-      const d = distance(x, y, xTurret, yTurret);
-      targets.push([x, y, d]);
-    });
-
-    const base = getBaseEntity(ecs);
-    const basePhysics = base.get(PhysicsBody);
-    const { x, y } = basePhysics;
-    const d = distance(x, y, xTurret, yTurret);
-    targets.push([x, y, d]);
-
-    for (let i = 0; i < targets.length; i++) {
-      const target = targets[i];
-      if (target[2] < closestDist) {
-        ret = target;
-        closestDist = target[2];
-      }
-    }
-
-    return ret.length ? ret : null;
-  };
-
-  /**
-   * @param {number} turretX
-   * @param {number} turretY
-   * @returns {number[]}
-   */
-  const acquirePlayerTarget = (turretX, turretY) => {
-    const playerShipPhysics = getPlayerEntity(ecs).get(PhysicsBody);
-    const distToPlayer = distance(
-      turretX,
-      turretY,
-      playerShipPhysics.x,
-      playerShipPhysics.y
-    );
-    return [playerShipPhysics.x, playerShipPhysics.y, distToPlayer];
-  };
-
-  /**
-   * @param {Turret} turret
-   * @param {string} type
-   * @param {number[]} target
-   * @returns {boolean | undefined}
-   */
-  const updateTurret = (turret, type, target) => {
-    const [targetX, targetY, d] = target;
-    const { physics, range, timer, sprTimer, dmg } = turret;
-
-    if (d < range) {
-      physics.lookAt([targetX, targetY]);
-      if (timer.isComplete()) {
-        timer.start();
-        sprTimer.start();
-        const vec = getVector(physics.angle, 16);
-        playSound('shoot1');
-        createProjectile(ecs, type, {
-          col:
-            type === 'player'
-              ? PLAYER_PROJECTILE_COLOR
-              : ENEMY_PROJECTILE_COLOR,
-          x: physics.x + vec[0],
-          y: physics.y + vec[1],
-          angle: physics.angle,
-          spd: 10 + Math.sqrt(physics.vx ** 2 + physics.vy ** 2),
-          dmg,
-          ms: 5000,
-        });
-      }
-      return true;
-    }
-  };
-
-  /** @param {Entity} entity */
-  const updateShipTurrets = (entity) => {
-    /** @type {Ship} */
-    const ship = entity.get(Ship);
-    /** @type {PhysicsBody} */
-    const { angle, x, y } = entity.get(PhysicsBody);
-    /** @type {HitPoints} */
-    const hp = entity.get(HitPoints);
-
-    const turretList = ship.getTurretPositions(angle);
-    for (const turret of turretList) {
-      const {
-        offset: [eX, eY],
-        physics,
-      } = turret;
-
-      const turretX = (physics.x = x + eX);
-      const turretY = (physics.y = y + eY);
-
-      /** @type {number[] | null}*/
-      let target;
-      let type = 'player';
-      if (isPlayerEntity(entity)) {
-        target = getClosestTarget(turretX, turretY, entity);
-      } else {
-        type = 'enemy';
-        target = acquirePlayerTarget(turretX, turretY);
-      }
-      if (!target || hp.hp <= 0) {
-        continue;
-      }
-
-      const player = getPlayerEntity(ecs).get(Player);
-      if (!isGameStarted(ecs) || player.gameOver) {
-        continue;
-      }
-
-      if (updateTurret(turret, type, target)) {
-        continue;
-      }
-    }
-  };
-
-  // /** @param {Entity} entity */
-  // const updateStandaloneTurrets = (entity) => {
-  //   /** @type {Turret} */
-  //   const turret = entity.get(Turret);
-  //   const target = acquirePlayerTarget(turret.physics.x, turret.physics.y);
-  //   updateTurret(turret, 'enemy', target);
-  // };
-
-  this.update = () => {
-    ships.iterate(updateShipTurrets);
-    // turrets.iterate(updateStandaloneTurrets);
-  };
-}
-
-/** @param {import('./ecs.js').ECS} ecs */
-function ShipAi(ecs) {
+function EnemyAi(ecs) {
   const selector = ecs.select(Ai, PhysicsBody);
 
   /** @param {Entity} entity */
@@ -470,6 +352,7 @@ function HitPointChecker(ecs) {
           player.gameOver = true;
           ui.endTimer.start();
           ui.endTimer.onCompletion().then(() => {
+            setLastScore(player.score);
             newGame(ecs);
           });
           // for (let i = 0; i < 20; i++) {
@@ -501,20 +384,100 @@ function HitPointChecker(ecs) {
         if (ind > -1) {
           usedCoords.splice(ind, 1);
         }
+        player.score++;
         const [baseX, baseY] = usedCoords[randomInt(0, usedCoords.length - 1)];
-        createBase(ecs, baseX, baseY);
+        createBase(ecs, baseX, baseY, player.score * 2);
         const ui = getUiEntity(ecs).get(Ui);
         ui.setText('A new Heart has spawned!');
-        player.score++;
 
         getPlayerEntity(ecs).get(Player).crates += 5;
-      } else {
+      } else if (entity.has(Ship)) {
         playSound('sink');
         entity.eject();
         createExplosion(ecs, x, y);
         createCrate(ecs, x, y);
+      } else if (entity.has(Ghost)) {
+        playSound('sink');
+        entity.eject();
+        createExplosion(ecs, x, y);
       }
     }
+  };
+
+  createSystem.bind(this)(selector, iterate);
+}
+
+/** @param {import('./ecs.js').ECS} ecs */
+function BoostApplicator(ecs) {
+  const selector = ecs.select(PhysicsBody, Boost, Exhaust);
+
+  /** @param {Entity} entity */
+  const iterate = (entity) => {
+    /** @type {Boost} */
+    const boost = entity.get(Boost);
+    /** @type {Exhaust} */
+    const exhaust = entity.get(Exhaust);
+    /** @type {PhysicsBody} */
+    const physics = entity.get(PhysicsBody);
+
+    if (boost.enabled && !boost.onCooldown) {
+      boost.gauge.fill(0.12);
+
+      exhaust.c = '#A1EF79';
+      physics.accRate = 0.7;
+
+      if (boost.gauge.isFull()) {
+        boost.onCooldown = true;
+      }
+    } else {
+      exhaust.resetColor();
+      physics.resetAcc();
+      if (boost.onCooldown && boost.gauge.getPct() === 0) {
+        boost.onCooldown = false;
+      }
+    }
+    boost.gauge.update();
+  };
+
+  createSystem.bind(this)(selector, iterate);
+}
+
+/** @param {import('./ecs.js').ECS} ecs */
+function GhostMover(ecs) {
+  const selector = ecs.select(PhysicsBody, Ghost, Renderable);
+
+  /** @param {Entity} entity */
+  const iterate = (entity) => {
+    /** @type {Ghost} */
+    const ghost = entity.get(Ghost);
+    /** @type {PhysicsBody} */
+    const physics = entity.get(PhysicsBody);
+    /** @type {Renderable} */
+    const renderable = entity.get(Renderable);
+
+    const playerEntity = getPlayerEntity(ecs);
+    const playerPhysics = playerEntity.get(PhysicsBody);
+
+    const d = distance(playerPhysics.x, playerPhysics.y, physics.x, physics.y);
+
+    if (d > 2000) {
+      ghost.timer.start();
+    }
+
+    const mult = 5;
+    const pct = ghost.timer.getPctComplete();
+    const offset = mult * Math.sin(normalize(pct, 0, 1, 0, 2 * Math.PI));
+    physics.y += offset;
+
+    if (ghost.timer.isComplete()) {
+      ghost.timer.start();
+
+      if (d < 1000) {
+        playSound('ghost');
+      }
+    }
+
+    renderable.flipped = physics.vx > 0;
   };
 
   createSystem.bind(this)(selector, iterate);
@@ -528,7 +491,9 @@ export const getSystems = (ecs) => {
   return [
     new Input(ecs),
     new UnderworldLegionSpawner(ecs),
-    new ShipAi(ecs),
+    new EnemyAi(ecs),
+    new GhostMover(ecs),
+    new BoostApplicator(ecs),
     new ExhaustParticleSpawner(ecs),
     new HitHighlightFlipper(ecs),
     new SpriteListFlipper(ecs),

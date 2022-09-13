@@ -1,8 +1,14 @@
 // @ts-check
 
 import { draw } from './draw.js';
-import { createTile } from './entities.js';
-import { getAngleTowards, getVector, randomInt, Timer } from './utils.js';
+import { createTile, PLAYER_PROJECTILE_COLOR } from './entities.js';
+import {
+  Gauge,
+  getAngleTowards,
+  getVector,
+  randomInt,
+  Timer,
+} from './utils.js';
 
 export const TILE_SCALE = 4;
 
@@ -22,7 +28,7 @@ export class PhysicsBody {
   angleRate = 2;
   acc = false;
   accRev = false;
-  accRate = 0.3;
+  accRate;
   coeff = 0.1;
   dragOn = true;
 
@@ -33,6 +39,12 @@ export class PhysicsBody {
   constructor(x, y) {
     this.x = x;
     this.y = y;
+    this.resetAcc();
+  }
+
+  /** */
+  resetAcc() {
+    this.accRate = 0.3;
   }
 
   /**
@@ -130,6 +142,7 @@ export class Renderable {
   flipped = false;
   highlighted = false;
   opacity = 1;
+  useHeading = true;
   /** @type {number} */
   z;
 
@@ -164,14 +177,18 @@ export class Renderable {
    * @param {number} [args.z]
    * @param {number} [args.scale]
    * @param {Ship} [args.ship]
+   * @param {boolean} [args.useHeading]
    */
-  constructor({ spriteName, circle, rectangle, z, scale, ship } = {}) {
+  constructor(args) {
+    const { spriteName, circle, rectangle, z, scale, ship, useHeading } =
+      args ?? {};
     this.spriteName = spriteName ?? '';
     this.circle = circle;
     this.rectangle = rectangle;
     this.z = z ?? 0;
     this.scale = scale ?? 1;
     this.ship = ship;
+    this.useHeading = useHeading ?? false;
   }
 }
 
@@ -218,8 +235,11 @@ export class Turret {
    * @param {number} args.dmg
    * @param {number} args.offset
    * @param {number} args.range
+   * @param {string} args.prjColor
+   * @param {number} args.prjSpd
+   * @param {number} args.prjSz
    */
-  constructor({ sprNum, ms, dmg, offset, range }) {
+  constructor({ sprNum, ms, dmg, offset, range, prjColor, prjSpd, prjSz }) {
     this.sprNum = sprNum;
     this.timer = new Timer(ms);
     this.sprTimer = new Timer(100);
@@ -228,6 +248,9 @@ export class Turret {
     this.physics = new PhysicsBody(0, 0);
     this.range = range;
     this.level = 1;
+    this.prjColor = prjColor;
+    this.prjSpd = prjSpd;
+    this.prjSz = prjSz;
   }
 }
 
@@ -289,8 +312,11 @@ export class Ship {
         sprNum: 22,
         ms: 1000,
         dmg: 1,
-        offset: 32 * (this.turrets.length + 1),
+        offset: 32,
         range: 300,
+        prjSpd: 10,
+        prjColor: PLAYER_PROJECTILE_COLOR,
+        prjSz: 5,
       })
     );
     const arr = this.spriteNumbs;
@@ -302,18 +328,20 @@ export class Ship {
    * @returns {boolean}
    */
   upgradeTurret() {
-    /** @type {any}*/
+    /** @type {Turret | undefined}*/
     let lowestTurret;
     for (const turret of this.turrets) {
       if (!lowestTurret || turret.level < lowestTurret.level) {
         lowestTurret = turret;
       }
     }
-    if (lowestTurret.level < 4) {
+    if (lowestTurret && lowestTurret.level < 4) {
       lowestTurret.level++;
       lowestTurret.sprNum += 2;
       lowestTurret.dmg++;
-      lowestTurret.range += 5;
+      lowestTurret.range += 10;
+      lowestTurret.prjSz++;
+      lowestTurret.prjSpd++;
       lowestTurret.timer.start(lowestTurret.timer.duration - 100);
       return true;
     }
@@ -372,6 +400,7 @@ export class Player {
   crates = 0;
   gameOver = false;
   gameStarted = false;
+  firstScreenUiVisible = false;
   /** @type {number[][]}*/
   usedCoords = [];
 
@@ -387,10 +416,17 @@ export class Player {
 
 export class Exhaust {
   spawnTimer = new Timer(100);
-  r;
+  /** @type {string} */
+  c;
   /** @param {number} r*/
   constructor(r) {
     this.r = r;
+    this.resetColor();
+  }
+
+  /** */
+  resetColor() {
+    this.c = '#92F4FF';
   }
 }
 
@@ -506,6 +542,9 @@ export class HitPoints {
 export class UnderworldLegion {
   waveNumber = 0;
   numEnemies = 0;
+  numEnemies2 = 0;
+  numEnemies3 = 0;
+  numEnemies4 = 0;
   waveTimer = new Timer(20000);
 
   /** */
@@ -553,6 +592,25 @@ export class Ui {
 
 export class Crate {}
 
+export class Boost {
+  /** */
+  constructor() {
+    this.gauge = new Gauge(10, 0.1);
+    this.onCooldown = false;
+    this.enabled = false;
+  }
+}
+
+export class Ghost {
+  /** */
+  constructor() {
+    this.timer = new Timer(3000);
+    this.timer.start();
+    this.hitTimer = new Timer(250);
+    this.hitTimer.start();
+  }
+}
+
 export const getComponents = () => {
   return [
     PhysicsBody,
@@ -574,5 +632,7 @@ export const getComponents = () => {
     Ui,
     UnderworldLegion,
     Crate,
+    Boost,
+    Ghost,
   ];
 };

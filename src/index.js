@@ -51,8 +51,6 @@ const loop = () => {
     if (frameTime > 4) {
       frameTime = 4;
     }
-    // while (frameTime > 0.0) {
-    // const deltaTime = Math.min(frameTime, EXPECTED_FS);
     const deltaTime = frameTime;
     frameTime -= deltaTime;
     const fm = deltaTime / EXPECTED_FS;
@@ -60,10 +58,13 @@ const loop = () => {
     draw.enabled = frameTime <= 0;
     integrate(deltaTime);
 
-    // }
-    draw.drawText('FS: ' + prevFrameTime, 20, 50, {
-      align: 'left',
-    });
+    // if (
+
+    // draw.drawText('FS: ' + prevFrameTime, draw.width - 100, 50, {
+    //   align: 'left',
+    // });
+
+    // fixed interval works out a bit better
     // requestAnimationFrame(_loop);
     // setTimeout(_loop, 16);
   };
