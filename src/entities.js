@@ -24,6 +24,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
 } from './components.js';
+import { render } from './render.js';
 import { Circ, distance, getVector, randomInt, Rect } from './utils.js';
 
 const Z_PLAYER = 10;
@@ -183,6 +184,8 @@ export function createPlayer(ecs) {
     new Boost()
   );
   playerShipId = ent.id;
+
+  render.addRenderObject(ent);
 }
 
 /**
@@ -202,6 +205,8 @@ export const createBase = (ecs, x, y, hpBonus) => {
     new HitPoints(10 + hpBonus)
   );
   baseId = ent.id;
+
+  render.addRenderObject(ent);
 };
 
 /**
@@ -331,8 +336,17 @@ export const createEnemyShip = (ecs, x, y, sprNum) => {
     new Exhaust(16),
     new HitHighlightRender(),
     new HitPoints(shipTemplate.hp),
+    new LimitedLifetime({
+      duration: 60000,
+      scale: {
+        start: 2,
+        end: 2,
+      },
+    }),
     new Ai()
   );
+
+  render.addRenderObject(ent);
 };
 
 /**
@@ -362,6 +376,8 @@ export const createGhost = (ecs, x, y) => {
     new Ai(),
     new Ghost()
   );
+
+  render.addRenderObject(ent);
 };
 
 /**
@@ -426,6 +442,8 @@ export const createExhaust = (ecs, x, y, c) => {
       },
     })
   );
+
+  render.addRenderObject(ent);
 };
 
 /**
@@ -454,6 +472,8 @@ export const createExplosion = (ecs, x, y) => {
       },
     })
   );
+
+  render.addRenderObject(ent);
 };
 
 /**
@@ -468,6 +488,9 @@ export const createTile = (ecs, x, y, spriteName, scale) => {
   const physics = new PhysicsBody(x, y);
   const ent = ecs.create();
   ent.add(new Renderable({ spriteName, scale, z: Z_WATER }), physics);
+
+  render.addRenderObject(ent);
+
   return ent.id;
 };
 
@@ -477,6 +500,8 @@ export const createTile = (ecs, x, y, spriteName, scale) => {
 export const createWater = (ecs) => {
   const ent = ecs.create();
   ent.add(new Water(ecs));
+
+  render.addRenderObject(ent);
 };
 
 /**
@@ -502,6 +527,8 @@ export const createIslandTile = (ecs, x, y, sprNum, scale, useHitRectangle) => {
       )
     );
   }
+
+  render.addRenderObject(ent);
 };
 
 /**
@@ -557,6 +584,8 @@ export const createProjectile = (
     physics,
     new HitCircle(Circ(x, y, 5))
   );
+
+  render.addRenderObject(ent);
 };
 
 export const createUi = (ecs) => {
@@ -596,4 +625,6 @@ export const createCrate = (ecs, x, y) => {
       },
     })
   );
+
+  render.addRenderObject(ent);
 };

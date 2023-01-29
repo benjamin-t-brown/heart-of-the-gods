@@ -18,6 +18,7 @@ import {
   getAngleTowards,
   getVector,
   playSound,
+  removeEntity,
 } from './utils.js';
 
 /** @param {import('./ecs.js').ECS} ecs */
@@ -124,7 +125,7 @@ export function Collisions(ecs) {
           [projPhysics.x, projPhysics.y, circ.circle.r]
         )
       ) {
-        projectileEntity.eject();
+        removeEntity(projectileEntity);
         shipHitHighlightRender.sprTimer.start();
         shipEntity.get(HitPoints).hp -= proj.dmg;
         playSound('hit1');
@@ -197,7 +198,7 @@ export function Collisions(ecs) {
         [projPhysics.x, projPhysics.y, circ.circle.r]
       )
     ) {
-      projectileEntity.eject();
+      removeEntity(projectileEntity);
       baseHitHighlightRender.sprTimer.start();
       baseEntity.get(HitPoints).hp -= proj.dmg;
       playSound('hit2');
@@ -233,7 +234,7 @@ export function Collisions(ecs) {
           [cratePhysics.x, cratePhysics.y, circ.circle.r]
         )
       ) {
-        crateEntity.eject();
+        removeEntity(crateEntity);
         player.crates++;
         playSound('crate');
         return;
@@ -333,7 +334,7 @@ export function Collisions(ecs) {
         [projPhysics.x, projPhysics.y, circ.circle.r]
       )
     ) {
-      projectileEntity.eject();
+      removeEntity(projectileEntity);
       ghostHitHighlightRender.sprTimer.start();
       ghostEntity.get(HitPoints).hp -= proj.dmg;
       playSound('hit2');

@@ -44,13 +44,15 @@ import {
   createSystem,
   isGameStarted,
   playSound,
+  removeEntity,
 } from './utils.js';
 import { Collisions } from './systems.collisions.js';
 import { Movement } from './systems.movement.js';
 import { RenderActors } from './systems.render-actors.js';
-import { RenderUi, setLastScore } from './systems.render-ui.js';
+import { setLastScore } from './systems.render-ui.js';
 import { Input } from './systems.input.js';
 import { TurretAI } from './systems.turret.js';
+import { render } from './render.js';
 
 /**
  * @typedef {object} Entity
@@ -73,7 +75,8 @@ function LimitedLifetimeUpdater(ecs) {
     const lt = entity.get(LimitedLifetime);
 
     if (lt.timer.isComplete()) {
-      entity.eject();
+      lt.cb();
+      removeEntity(entity);
     }
   };
 
@@ -155,55 +158,116 @@ function UnderworldLegionSpawner(ecs) {
     const legion = legionEntity.get(UnderworldLegion);
 
     if (isGameStarted(ecs)) {
-      if (legion.waveTimer.isComplete()) {
-        console.log(
-          'SPAWN LEGION',
-          legion.waveNumber +
-            5 -
-            legion.numEnemies2 -
-            legion.numEnemies3 -
-            legion.numEnemies4
-        );
-        const numBasicShips = legion.waveNumber + 5;
-        legion.numEnemies2 - legion.numEnemies3 - legion.numEnemies4;
-
-        legion.waveNumber++;
-        legion.waveTimer.start();
-        if (legion.waveNumber % 4 === 0) {
-          for (let i = 0; i < legion.waveNumber / 4; i++) {
+      if (legion.ghostTimer.isComplete()) {
+        if (player.score >= 3) {
+          for (let i = 0; i < legion.ghostNumber; i++) {
+            console.log('Spawn ghost', player.score);
             spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ghost');
+          }
+          legion.ghostTimer.start();
+          legion.ghostNumber++;
+        } else {
+          legion.ghostTimer.start();
+        }
+      }
+
+      if (legion.waveTimer.isComplete()) {
+        console.log('Spawn ship');
+
+        if (legion.numEnemies % 10 === 0) {
+          legion.waveNumber++;
+          if (legion.waveNumber > 4) {
+            legion.waveNumber = 4;
+            legion.waveMin++;
+            if (legion.waveMin > 4) {
+              legion.waveMin = 4;
+            }
           }
         }
 
-        if (legion.waveNumber % 3 === 0) {
-          legion.numEnemies2++;
-        }
-        if (legion.waveNumber % 3 === 0 && legion.numEnemies2 > 1) {
-          legion.numEnemies3++;
-        }
-        if (legion.waveNumber % 3 === 0 && legion.numEnemies3 > 1) {
-          legion.numEnemies4++;
+        spawnSomething(
+          WORLD_WIDTH,
+          WORLD_WIDTH * 1.5,
+          legion,
+          'ship',
+          randomInt(legion.waveMin, legion.waveNumber)
+        );
+
+        if (legion.numEnemies > 50) {
+          spawnSomething(
+            WORLD_WIDTH,
+            WORLD_WIDTH * 1.5,
+            legion,
+            'ship',
+            randomInt(legion.waveMin, legion.waveNumber)
+          );
         }
 
-        for (let i = 0; i < numBasicShips; i++) {
-          console.log('SPAWN SHIP');
-          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 1);
-        }
-        for (let i = 0; i < legion.numEnemies2; i++) {
-          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 2);
-        }
-        for (let i = 0; i < legion.numEnemies2; i++) {
-          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 3);
-        }
-        for (let i = 0; i < legion.numEnemies2; i++) {
-          spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 4);
+        legion.numEnemies++;
+        legion.waveTimer.start();
+      } else if (legion.numEnemies <= 0) {
+        console.log('Spawn initial ships');
+        legion.waveNumber = 1;
+        legion.waveMin = 1;
+        legion.ghostNumber = 1;
+        for (let i = 0; i < 5; i++) {
+          spawnSomething(0, WORLD_WIDTH / 2, legion, 'ship', 1);
         }
       }
-    } else if (legion.numEnemies <= 0) {
-      for (let i = 0; i < legion.waveNumber + 3; i++) {
-        spawnSomething(0, WORLD_WIDTH / 2, legion, 'ship', 1);
-      }
+    } else {
+      legion.waveTimer.start();
     }
+
+    // if (isGameStarted(ecs)) {
+    //   if (legion.waveTimer.isComplete()) {
+    //     console.log(
+    //       'SPAWN LEGION',
+    //       legion.waveNumber +
+    //         5 -
+    //         legion.numEnemies2 -
+    //         legion.numEnemies3 -
+    //         legion.numEnemies4
+    //     );
+    //     const numBasicShips = legion.waveNumber + 5;
+    //     legion.numEnemies2 - legion.numEnemies3 - legion.numEnemies4;
+
+    //     legion.waveNumber++;
+    //     legion.waveTimer.start();
+    //     if (legion.waveNumber % 4 === 0) {
+    //       for (let i = 0; i < legion.waveNumber / 4; i++) {
+    //         spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ghost');
+    //       }
+    //     }
+
+    //     if (legion.waveNumber % 3 === 0) {
+    //       legion.numEnemies2++;
+    //     }
+    //     if (legion.waveNumber % 3 === 0 && legion.numEnemies2 > 1) {
+    //       legion.numEnemies3++;
+    //     }
+    //     if (legion.waveNumber % 3 === 0 && legion.numEnemies3 > 1) {
+    //       legion.numEnemies4++;
+    //     }
+
+    //     for (let i = 0; i < numBasicShips; i++) {
+    //       console.log('SPAWN SHIP');
+    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 1);
+    //     }
+    //     for (let i = 0; i < legion.numEnemies2; i++) {
+    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 2);
+    //     }
+    //     for (let i = 0; i < legion.numEnemies2; i++) {
+    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 3);
+    //     }
+    //     for (let i = 0; i < legion.numEnemies2; i++) {
+    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 4);
+    //     }
+    //   }
+    // } else if (legion.numEnemies <= 0) {
+    //   for (let i = 0; i < legion.waveNumber + 3; i++) {
+    //     spawnSomething(0, WORLD_WIDTH / 2, legion, 'ship', 1);
+    //   }
+    // }
   };
 }
 
@@ -322,6 +386,8 @@ function CameraMover(ecs) {
 
     camera.x = Math.floor(camera.x);
     camera.y = Math.round(camera.y);
+
+    render.camera = camera;
   };
 
   createSystem.bind(this)(selector, iterate);
@@ -369,7 +435,7 @@ function HitPointChecker(ecs) {
         }
         ui.endTimer.update();
       } else if (isBaseEntity(entity)) {
-        entity.eject();
+        removeEntity(entity);
         createExplosion(ecs, x, y);
         playSound('baseExpl');
 
@@ -393,12 +459,12 @@ function HitPointChecker(ecs) {
         getPlayerEntity(ecs).get(Player).crates += 5;
       } else if (entity.has(Ship)) {
         playSound('sink');
-        entity.eject();
+        removeEntity(entity);
         createExplosion(ecs, x, y);
         createCrate(ecs, x, y);
       } else if (entity.has(Ghost)) {
         playSound('sink');
-        entity.eject();
+        removeEntity(entity);
         createExplosion(ecs, x, y);
       }
     }
@@ -502,7 +568,7 @@ export const getSystems = (ecs) => {
     new TurretAI(ecs),
     new CameraMover(ecs),
     new RenderActors(ecs),
-    new RenderUi(ecs),
+    // new RenderUi(ecs),
     new Collisions(ecs),
     new LimitedLifetimeUpdater(ecs),
     new HitPointChecker(ecs),

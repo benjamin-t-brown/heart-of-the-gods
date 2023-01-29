@@ -214,16 +214,20 @@ export class LimitedLifetime {
     end: 1,
   };
 
+  cb = () => void 0;
+
   /**
    * @param {object} args
    * @param {number} args.duration
    * @param {MinMax} [args.opacity]
    * @param {MinMax} [args.scale]
+   * @param {any} [args.cb]
    */
-  constructor({ duration, scale, opacity }) {
+  constructor({ duration, scale, opacity, cb }) {
     this.timer = new Timer(duration);
     this.opacity = opacity ?? this.opacity;
     this.scale = scale ?? this.scale;
+    this.cb = cb ?? (() => void 0);
   }
 }
 
@@ -541,11 +545,14 @@ export class HitPoints {
 
 export class UnderworldLegion {
   waveNumber = 0;
+  waveMin = 1;
   numEnemies = 0;
   numEnemies2 = 0;
   numEnemies3 = 0;
   numEnemies4 = 0;
-  waveTimer = new Timer(20000);
+  waveTimer = new Timer(5000);
+  ghostNumber = 1;
+  ghostTimer = new Timer(60000);
 
   /** */
   constructor() {

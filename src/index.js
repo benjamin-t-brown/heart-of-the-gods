@@ -3,6 +3,8 @@ import { ecs } from './ecs.js';
 import { getComponents } from './components.js';
 import { getSystems } from './systems.js';
 import { newGame } from './entities.js';
+import { render } from './render.js';
+import { RenderUi } from './systems.render-ui.js';
 
 console.log('index.js loaded');
 const EXPECTED_FS = 10;
@@ -41,6 +43,8 @@ const loop = () => {
   const startTime = performance.now();
   let prevNow = startTime;
 
+  const renderUi = new RenderUi(ecs);
+
   /** */
   const _loop = () => {
     const now = performance.now();
@@ -53,7 +57,7 @@ const loop = () => {
     }
     const deltaTime = frameTime;
     frameTime -= deltaTime;
-    const fm = deltaTime / EXPECTED_FS;
+    const fm = deltaTime * 2 / EXPECTED_FS;
     draw.fm = fm;
     draw.enabled = frameTime <= 0;
     integrate(deltaTime);
@@ -65,11 +69,17 @@ const loop = () => {
     // });
 
     // fixed interval works out a bit better
-    // requestAnimationFrame(_loop);
     // setTimeout(_loop, 16);
   };
-  setInterval(_loop, 16);
-  // _loop();
+
+  const _loopRender = () => {
+    render.drawRenderObjects(ecs);
+    renderUi.update();
+    requestAnimationFrame(_loopRender);
+  };
+
+  setInterval(_loop, 30);
+  _loopRender();
 };
 
 window.addEventListener('load', async () => {

@@ -1,9 +1,17 @@
 import { Player } from './components.js';
 import { draw } from './draw.js';
 import { getPlayerEntity } from './entities.js';
+import { render } from './render.js';
 import { setVolume, zzfx } from './zzfx.js';
 
 const getNow = () => window.performance.now();
+
+/** @param {import('./systems.js').Entity} entity */
+export const removeEntity = (entity) => {
+  render.removeRenderObject(entity);
+  entity.eject();
+};
+
 const timers = [];
 export class Timer {
   /**
