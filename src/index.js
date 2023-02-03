@@ -78,7 +78,7 @@ const loop = () => {
     requestAnimationFrame(_loopRender);
   };
 
-  setInterval(_loop, 30);
+  setInterval(_loop, 22);
   _loopRender();
 };
 
