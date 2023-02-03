@@ -121,6 +121,7 @@ export const generateCoords = (minR, maxR, minDistBetween, usedCoords) => {
  */
 export const newGame = (ecs) => {
   ecs.reset();
+  render.clear();
 
   createPlayer(ecs);
   createWater(ecs);

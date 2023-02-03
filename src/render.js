@@ -37,6 +37,11 @@ class Render {
     }
   }
 
+  /** */
+  clear() {
+    this.renderObjects = [];
+  }
+
   /** @param {import('./systems.js').Entity} entity */
   drawEntity = (entity) => {
     /** @type {PhysicsBody} */

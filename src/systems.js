@@ -217,57 +217,6 @@ function UnderworldLegionSpawner(ecs) {
     } else {
       legion.waveTimer.start();
     }
-
-    // if (isGameStarted(ecs)) {
-    //   if (legion.waveTimer.isComplete()) {
-    //     console.log(
-    //       'SPAWN LEGION',
-    //       legion.waveNumber +
-    //         5 -
-    //         legion.numEnemies2 -
-    //         legion.numEnemies3 -
-    //         legion.numEnemies4
-    //     );
-    //     const numBasicShips = legion.waveNumber + 5;
-    //     legion.numEnemies2 - legion.numEnemies3 - legion.numEnemies4;
-
-    //     legion.waveNumber++;
-    //     legion.waveTimer.start();
-    //     if (legion.waveNumber % 4 === 0) {
-    //       for (let i = 0; i < legion.waveNumber / 4; i++) {
-    //         spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ghost');
-    //       }
-    //     }
-
-    //     if (legion.waveNumber % 3 === 0) {
-    //       legion.numEnemies2++;
-    //     }
-    //     if (legion.waveNumber % 3 === 0 && legion.numEnemies2 > 1) {
-    //       legion.numEnemies3++;
-    //     }
-    //     if (legion.waveNumber % 3 === 0 && legion.numEnemies3 > 1) {
-    //       legion.numEnemies4++;
-    //     }
-
-    //     for (let i = 0; i < numBasicShips; i++) {
-    //       console.log('SPAWN SHIP');
-    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 1);
-    //     }
-    //     for (let i = 0; i < legion.numEnemies2; i++) {
-    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 2);
-    //     }
-    //     for (let i = 0; i < legion.numEnemies2; i++) {
-    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 3);
-    //     }
-    //     for (let i = 0; i < legion.numEnemies2; i++) {
-    //       spawnSomething(WORLD_WIDTH, WORLD_WIDTH * 1.5, legion, 'ship', 4);
-    //     }
-    //   }
-    // } else if (legion.numEnemies <= 0) {
-    //   for (let i = 0; i < legion.waveNumber + 3; i++) {
-    //     spawnSomething(0, WORLD_WIDTH / 2, legion, 'ship', 1);
-    //   }
-    // }
   };
 }
 
