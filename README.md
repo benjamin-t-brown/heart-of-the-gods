@@ -1,6 +1,6 @@
-js13k2022 Competition Entry
+## js13k2022 Competition Entry
 
-[Play here!](https://benjamin-t-brown.github.io/hotg/index.html)
+[Play here!](https://benjamin-t-brown.github.io/heart-of-the-gods/index.html)
 
 Theme: DEATH
 
