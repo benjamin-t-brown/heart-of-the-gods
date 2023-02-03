@@ -5,6 +5,7 @@ import { getSystems } from './systems.js';
 import { newGame } from './entities.js';
 import { render } from './render.js';
 import { RenderUi } from './systems.render-ui.js';
+import { normalize } from './utils.js';
 
 console.log('index.js loaded');
 const EXPECTED_FS = 10;
@@ -45,6 +46,9 @@ const loop = () => {
 
   const renderUi = new RenderUi(ecs);
 
+  const msPerUpdate = 22;
+  const targetMult = normalize(msPerUpdate, 16, 30, 1, 2);
+
   /** */
   const _loop = () => {
     const now = performance.now();
@@ -57,7 +61,7 @@ const loop = () => {
     }
     const deltaTime = frameTime;
     frameTime -= deltaTime;
-    const fm = deltaTime * 2 / EXPECTED_FS;
+    const fm = (deltaTime * targetMult) / EXPECTED_FS;
     draw.fm = fm;
     draw.enabled = frameTime <= 0;
     integrate(deltaTime);
@@ -78,7 +82,7 @@ const loop = () => {
     requestAnimationFrame(_loopRender);
   };
 
-  setInterval(_loop, 22);
+  setInterval(_loop, msPerUpdate);
   _loopRender();
 };
 

@@ -270,7 +270,7 @@ export const createEnemyShip = (ecs, x, y, sprNum) => {
           range: 400,
         },
       ],
-      hp: 3,
+      hp: 10,
       spriteR: 8,
     },
     3: {
@@ -284,7 +284,7 @@ export const createEnemyShip = (ecs, x, y, sprNum) => {
           range: 350,
         },
       ],
-      hp: 10,
+      hp: 15,
       spriteR: 8,
     },
     4: {
@@ -619,7 +619,7 @@ export const createCrate = (ecs, x, y) => {
     new SpriteListRender(['spr_8', 'spr_9'], 400),
     new HitCircle(Circ(x, y, 16)),
     new LimitedLifetime({
-      duration: 60 * 1000,
+      duration: 75 * 1000,
       scale: {
         start: 2,
         end: 2,

@@ -550,7 +550,7 @@ export class UnderworldLegion {
   numEnemies2 = 0;
   numEnemies3 = 0;
   numEnemies4 = 0;
-  waveTimer = new Timer(5000);
+  waveTimer = new Timer(4500);
   ghostNumber = 1;
   ghostTimer = new Timer(60000);
 
