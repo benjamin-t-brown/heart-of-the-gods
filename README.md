@@ -2,6 +2,8 @@
 
 [Play here!](https://benjamin-t-brown.github.io/heart-of-the-gods/index.html)
 
+![image](https://user-images.githubusercontent.com/1266353/216669246-85c1df21-9ed1-459c-8993-c3df70865688.png)
+
 Theme: DEATH
 
 Game: Heart of the Gods
